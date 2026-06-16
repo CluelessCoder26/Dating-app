@@ -1,0 +1,65 @@
+# ========================
+# Dependencies
+# ========================
+node_modules/
+.pnp
+.pnp.js
+
+# ========================
+# Environment / Secrets
+# ========================
+.env
+.env.*
+!.env.example
+
+# ========================
+# Database
+# ========================
+*.db
+*.sqlite
+*.sqlite3
+prisma/dev.db
+prisma/dev.db-journal
+
+# ========================
+# Build output
+# ========================
+dist/
+build/
+.next/
+out/
+
+# ========================
+# Logs
+# ========================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# ========================
+# OS / Editor junk
+# ========================
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ========================
+# Vite / React
+# ========================
+*.local
+frontend/.cache/
+
+# ========================
+# Uploads (user content)
+# ========================
+backend/uploads/
+websocket/uploads/

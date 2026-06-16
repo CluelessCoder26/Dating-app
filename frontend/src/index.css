@@ -1,0 +1,230 @@
+/* ============================================================
+   IMPORTS — must be first
+   ============================================================ */
+@import url("https://fonts.googleapis.com/css2?family=Epilogue:wght@400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/icon?family=Material+Icons");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200");
+@import "tailwindcss";
+
+/* ============================================================
+   TAILWIND V4 THEME — CSS variables
+   ============================================================ */
+@theme {
+  /* ---- Colors ---- */
+  --color-primary:                    #005ab7;
+  --color-primary-container:          #0072e5;
+  --color-on-primary:                 #ffffff;
+  --color-on-primary-container:       #fefcff;
+  --color-primary-fixed:              #d7e2ff;
+  --color-primary-fixed-dim:          #abc7ff;
+  --color-on-primary-fixed:           #001b3f;
+  --color-on-primary-fixed-variant:   #004590;
+
+  --color-secondary:                  #5d5e5f;
+  --color-secondary-container:        #e0dfdf;
+  --color-on-secondary:               #ffffff;
+  --color-on-secondary-container:     #626363;
+  --color-secondary-fixed:            #e3e2e2;
+  --color-secondary-fixed-dim:        #c6c6c6;
+  --color-on-secondary-fixed:         #1a1c1c;
+  --color-on-secondary-fixed-variant: #464747;
+
+  --color-tertiary:                   #702ede;
+  --color-tertiary-container:         #8a4ef8;
+  --color-on-tertiary:                #ffffff;
+  --color-on-tertiary-container:      #fffbff;
+  --color-tertiary-fixed:             #eaddff;
+  --color-tertiary-fixed-dim:         #d2bbff;
+  --color-on-tertiary-fixed:          #25005a;
+  --color-on-tertiary-fixed-variant:  #5a00c6;
+
+  --color-surface:                    #f9f9ff;
+  --color-surface-bright:             #f9f9ff;
+  --color-surface-dim:                #d7dae4;
+  --color-surface-variant:            #e0e2ed;
+  --color-surface-container:          #ebedf8;
+  --color-surface-container-low:      #f1f3fe;
+  --color-surface-container-high:     #e6e8f3;
+  --color-surface-container-highest:  #e0e2ed;
+  --color-surface-container-lowest:   #ffffff;
+  --color-surface-tint:               #005cbc;
+
+  --color-background:                 #f9f9ff;
+  --color-on-background:              #181c23;
+  --color-on-surface:                 #181c23;
+  --color-on-surface-variant:         #414754;
+
+  --color-outline:                    #717786;
+  --color-outline-variant:            #c1c6d7;
+
+  --color-error:                      #ba1a1a;
+  --color-error-container:            #ffdad6;
+  --color-on-error:                   #ffffff;
+  --color-on-error-container:         #93000a;
+
+  --color-inverse-surface:            #2d3039;
+  --color-inverse-on-surface:         #eef0fb;
+  --color-inverse-primary:            #abc7ff;
+
+  /* ---- Font families ---- */
+  --font-sans:        "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-body-lg:     "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-body-md:     "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-title-md:    "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-headline-lg: "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-display-lg:  "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  --font-label-sm:    "Epilogue", ui-sans-serif, system-ui, sans-serif;
+
+  /* ---- Border radii ---- */
+  --radius:     0.25rem;
+  --radius-lg:  0.5rem;
+  --radius-xl:  0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Epilogue", ui-sans-serif, system-ui, sans-serif;
+  background-color: #f9f9ff;
+  color: #181c23;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   GLASS / CARD UTILITIES
+   ============================================================ */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(192, 192, 192, 0.2);
+}
+
+.glass-card {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(171, 199, 255, 0.3);
+  box-shadow: 0 8px 40px rgba(0, 92, 188, 0.08);
+}
+
+.pearl-gradient {
+  background: linear-gradient(135deg, #F8F9FA 0%, #E3F2FD 100%);
+}
+
+/* ============================================================
+   BUTTON GLOW
+   ============================================================ */
+.glow-button {
+  box-shadow: 0 8px 32px rgba(0, 127, 255, 0.20);
+  transition: all 0.3s ease;
+}
+.glow-button:hover {
+  box-shadow: 0 14px 40px rgba(0, 127, 255, 0.30);
+  transform: translateY(-2px);
+}
+
+/* ============================================================
+   SPARK PULSE ANIMATION
+   ============================================================ */
+.spark-pulse {
+  box-shadow: 0 0 0 0 rgba(112, 46, 222, 0.4);
+  animation: sparkPulse 2s infinite;
+}
+@keyframes sparkPulse {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0   rgba(112, 46, 222, 0.7); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 12px rgba(112, 46, 222, 0);   }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0   rgba(112, 46, 222, 0);   }
+}
+
+/* ============================================================
+   FLOATING ORB BACKGROUND
+   ============================================================ */
+.floating-circles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background: radial-gradient(circle at top left, #f9f9ff 0%, #eef0fb 100%);
+  pointer-events: none;
+}
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+  animation: floatOrb 20s infinite alternate ease-in-out;
+}
+@keyframes floatOrb {
+  0%   { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(100px, 50px) scale(1.12); }
+}
+
+/* ============================================================
+   MATERIAL SYMBOLS
+   ============================================================ */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined", sans-serif;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-feature-settings: 'liga';
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+.pb-safe      { padding-bottom: env(safe-area-inset-bottom, 16px); }
+.premium-shadow { box-shadow: 0 10px 30px -5px rgba(0, 92, 188, 0.12); }
+
+.gradient-text {
+  background: linear-gradient(135deg, #005ab7, #702ede);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---- Swipe animations ---- */
+@keyframes swipeLeft  { to { transform: translateX(-150%) rotate(-30deg); opacity: 0; } }
+@keyframes swipeRight { to { transform: translateX( 150%) rotate( 30deg); opacity: 0; } }
+.swipe-left  { animation: swipeLeft  0.4s ease forwards; }
+.swipe-right { animation: swipeRight 0.4s ease forwards; }
+
+/* ---- Pop in ---- */
+@keyframes popIn {
+  0%   { transform: scale(0.6); opacity: 0; }
+  80%  { transform: scale(1.05); }
+  100% { transform: scale(1);    opacity: 1; }
+}
+.pop-in { animation: popIn 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+
+/* ---- Fade in ---- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+.fade-in { animation: fadeIn 0.4s ease forwards; }

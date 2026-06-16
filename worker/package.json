@@ -1,0 +1,21 @@
+{
+  "name": "dating-app-worker",
+  "version": "1.0.0",
+  "description": "Background BullMQ worker for dating app processing",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.14.0",
+    "bullmq": "^5.8.2",
+    "dotenv": "^16.4.5",
+    "redis": "^4.6.14"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "prisma": "^5.14.0"
+  }
+}
