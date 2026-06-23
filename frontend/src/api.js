@@ -33,7 +33,14 @@ async function request(endpoint, options = {}) {
     if ((response.status === 401 || response.status === 403) && !endpoint.startsWith('/auth/login') && !endpoint.startsWith('/auth/register')) {
       localStorage.removeItem('token');
     }
-    throw new Error(data.error || data.message || `Request failed (${response.status})`);
+    
+    let errMsg = data.error || data.message || `Request failed (${response.status})`;
+    // Include Zod validation details if present
+    if (data.details && Array.isArray(data.details)) {
+      errMsg = data.details.map(d => d.message).join(', ');
+    }
+    
+    throw new Error(errMsg);
   }
 
   return data;
@@ -143,6 +150,19 @@ export const api = {
 
   getBlocked() {
     return request('/block');
+  },
+
+  // Safety & Moderation
+  reportUser(reason, details) {
+    return request('/report', {
+      method: 'POST',
+      body: JSON.stringify({ reason, details })
+    });
+  },
+
+  // Insights
+  getInsights() {
+    return request('/insights');
   },
 
   // WebSocket Manager

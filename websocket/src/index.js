@@ -4,7 +4,7 @@ import { createClient } from 'redis';
 import { createAdapter } from '@socket.io/redis-adapter';
 import jwt from 'jsonwebtoken';
 import { Queue } from 'bullmq';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../../backend/node_modules/@prisma/client/index.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

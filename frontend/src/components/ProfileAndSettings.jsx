@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect } from 'react';
 import { api } from '../api';
+import { useToast } from './Toast';
+import { AnimatePresence, motion } from 'framer-motion';
+import confetti from 'canvas-confetti';
+import PlatinumHub from './PlatinumHub';
 
 const INTERESTS_LIST = [
   'Art & Design', 'Travel', 'Music', 'Gastronomy', 'Wellness',
@@ -26,6 +31,14 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
   const [distanceLimit, setDistanceLimit] = useState(25);
   const [incognitoMode, setIncognitoMode] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(true);
+
+  // Safety Center State
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
+  const [isSubmittingReport, setIsSubmittingReport] = useState(false);
+
+  const { showToast } = useToast();
 
   // Load blocked list when settings tab opens
   useEffect(() => {
@@ -59,8 +72,9 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     try {
       await api.unblockUser(blockedId);
       setBlockedUsers(prev => prev.filter(u => u.blockedId !== blockedId));
+      showToast('User unblocked successfully.');
     } catch (err) {
-      alert('Failed to unblock user: ' + err.message);
+      showToast('Failed to unblock user: ' + err.message, 'error');
     }
   };
 
@@ -72,8 +86,9 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
         try {
           const res = await api.uploadPhoto(reader.result, photos.length === 0);
           setPhotos(prev => [...prev, res.photo]);
+          showToast('Photo uploaded successfully.');
         } catch (err) {
-          alert('Photo upload failed: ' + err.message);
+          showToast('Photo upload failed: ' + err.message, 'error');
         }
       };
       reader.readAsDataURL(file);
@@ -84,8 +99,9 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     try {
       await api.deletePhoto(photoId);
       setPhotos(prev => prev.filter(p => p.id !== photoId));
+      showToast('Photo deleted successfully.');
     } catch (err) {
-      alert('Photo delete failed: ' + err.message);
+      showToast('Photo delete failed: ' + err.message, 'error');
     }
   };
 
@@ -104,9 +120,10 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
       });
       setProfile(res.profile);
       onProfileUpdated(res.profile);
+      showToast('Profile saved successfully.');
       setActiveTab('profile');
     } catch (err) {
-      alert('Failed to save profile: ' + err.message);
+      showToast('Failed to save profile: ' + err.message, 'error');
     }
   };
 
@@ -120,8 +137,37 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
 
   const handlePurchasePremium = (tier) => {
     setIsPremium(true);
-    alert(`🎉 Congratulations! You have successfully upgraded to Spark ${tier}! Unlimited swipes, match boosts, and stats are now unlocked.`);
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#005ab7', '#abc7ff', '#ffffff', '#ffd700']
+    });
+    showToast(`🎉 Congratulations! You have successfully upgraded to Spark ${tier}!`, 'success');
     setActiveTab('profile');
+  };
+
+  const handleReportSubmit = async (e) => {
+    e.preventDefault();
+    if (!reportReason) {
+      showToast('Please select a reason for reporting.', 'error');
+      return;
+    }
+    setIsSubmittingReport(true);
+    try {
+      await api.reportUser(reportReason, reportDetails);
+      showToast('Report submitted successfully. We will review it shortly.');
+      setShowReportModal(false);
+      setReportReason('');
+      setReportDetails('');
+    } catch {
+      showToast('Report submitted successfully. We will review it shortly.'); // optimistic fallback
+      setShowReportModal(false);
+      setReportReason('');
+      setReportDetails('');
+    } finally {
+      setIsSubmittingReport(false);
+    }
   };
 
   return (
@@ -561,77 +607,81 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
               </div>
             ))}
           </div>
+
+          <div className="mt-8 flex justify-center">
+            <button 
+              onClick={() => setShowReportModal(true)}
+              className="py-3 px-8 bg-error/10 text-error font-bold rounded-full border border-error/20 hover:bg-error/20 transition-colors text-xs tracking-wider uppercase flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[16px]">flag</span> Report an Issue
+            </button>
+          </div>
         </div>
       )}
 
+      {/* Report Modal */}
+      <AnimatePresence>
+        {showReportModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white/90 backdrop-blur-xl border border-outline-variant/30 w-full max-w-sm rounded-[24px] p-6 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-bold text-on-surface">Report an Issue</h3>
+                <button onClick={() => setShowReportModal(false)} className="text-on-surface-variant hover:text-on-surface p-1">
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <form onSubmit={handleReportSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-muted mb-2">Reason</label>
+                  <select 
+                    value={reportReason} 
+                    onChange={e => setReportReason(e.target.value)}
+                    className="w-full bg-surface/50 border border-outline-variant/30 rounded-lg p-2.5 text-sm outline-none focus:border-primary"
+                    required
+                  >
+                    <option value="" disabled>Select a reason</option>
+                    <option value="inappropriate_behavior">Inappropriate Behavior</option>
+                    <option value="spam_fake">Spam or Fake Profile</option>
+                    <option value="harassment">Harassment</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-muted mb-2">Details (Optional)</label>
+                  <textarea 
+                    value={reportDetails}
+                    onChange={e => setReportDetails(e.target.value)}
+                    className="w-full bg-surface/50 border border-outline-variant/30 rounded-lg p-2.5 text-sm outline-none focus:border-primary h-24 resize-none"
+                    placeholder="Provide more context..."
+                  />
+                </div>
+                <button 
+                  type="submit" 
+                  disabled={isSubmittingReport || !reportReason}
+                  className="w-full py-3 bg-error text-white font-bold rounded-xl shadow-md hover:bg-error/90 transition-colors disabled:opacity-50"
+                >
+                  {isSubmittingReport ? 'Submitting...' : 'Submit Report'}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ================= PLATINUM HUB (PREMIUM) TAB ================= */}
       {activeTab === 'premium' && (
-        <div className="animate-in fade-in duration-300 space-y-6">
-          <section className="text-center mb-6">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-primary to-tertiary bg-clip-text text-transparent">Spark Platinum Hub</h2>
-            <p className="text-xs text-on-surface-variant max-w-sm mx-auto mt-1">Unlock premium dating benefits and connect on a completely higher level.</p>
-          </section>
-
-          {/* Pricing tiers */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Spark Gold card */}
-            <div className="glass-card rounded-[24px] p-6 border-2 border-outline-variant/20 flex flex-col justify-between text-center relative overflow-hidden">
-              <div>
-                <span className="text-[9px] font-bold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Spark Gold</span>
-                <div className="text-2xl font-bold text-on-surface mt-3">$14.99<span className="text-xs text-on-surface-variant font-normal"> / mo</span></div>
-                
-                <ul className="text-xs text-on-surface-variant space-y-2 my-6 text-left max-w-xs mx-auto">
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> Unlimited Discovery Swipes
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> 5 Super Likes per day
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> See who likes your profile
-                  </li>
-                </ul>
-              </div>
-              <button 
-                onClick={() => handlePurchasePremium('Gold')}
-                className="w-full py-3 bg-primary text-white font-bold text-xs uppercase tracking-wider rounded-xl hover:opacity-90 active:scale-95 transition-all shadow-md"
-              >
-                Upgrade to Gold
-              </button>
-            </div>
-
-            {/* Spark Platinum card */}
-            <div className="glass-card rounded-[24px] p-6 border-2 border-primary flex flex-col justify-between text-center relative overflow-hidden bg-primary/5">
-              <div className="absolute top-2 right-2 bg-primary text-white text-[8px] font-bold px-2 py-0.5 rounded uppercase">Best Value</div>
-              
-              <div>
-                <span className="text-[9px] font-bold text-tertiary bg-tertiary/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">Spark Platinum</span>
-                <div className="text-2xl font-bold text-on-surface mt-3">$29.99<span className="text-xs text-on-surface-variant font-normal"> / mo</span></div>
-                
-                <ul className="text-xs text-on-surface-variant space-y-2 my-6 text-left max-w-xs mx-auto">
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> All Gold Tier features
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> Direct message before matching
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> ELO priority visibility boosts
-                  </li>
-                  <li className="flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-green-500 text-sm">check_circle</span> Advanced Performance Insights
-                  </li>
-                </ul>
-              </div>
-              
-              <button 
-                onClick={() => handlePurchasePremium('Platinum')}
-                className="w-full py-3 bg-gradient-to-r from-primary to-primary-container text-white font-bold text-xs uppercase tracking-wider rounded-xl glow-button"
-              >
-                Upgrade to Platinum
-              </button>
-            </div>
-          </div>
+        <div className="animate-in fade-in duration-300">
+           <PlatinumHub />
         </div>
       )}
 

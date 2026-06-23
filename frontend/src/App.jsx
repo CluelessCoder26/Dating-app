@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+/* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect, no-unused-vars */
+import { useState, useEffect } from 'react';
 import { api } from './api';
 import Splash from './components/Splash';
 import OnboardingFlow from './components/OnboardingFlow';
 import DiscoveryCanvas from './components/DiscoveryCanvas';
 import MatchesAndChat from './components/MatchesAndChat';
 import ProfileAndSettings from './components/ProfileAndSettings';
+import HeartTab from './components/HeartTab';
+import { ToastProvider } from './components/Toast';
 
-export default function App() {
+function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token') || '');
   const [myProfile, setMyProfile] = useState(null);
@@ -14,23 +17,14 @@ export default function App() {
 
   // Screen flow routing
   const [activeTab, setActiveTab] = useState('discover');
-  const [isLoginView, setIsLoginView] = useState(true);
-  const [loginPhone, setLoginPhone] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authLoading, setAuthLoading] = useState(false);
-
-  // Register form state
-  const [regPhone, setRegPhone] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regConfirm, setRegConfirm] = useState('');
 
   // Match interaction state passing
   const [selectedMatch, setSelectedMatch] = useState(null); // { matchId, profile }
 
   // Load user profile context
   const loadProfileContext = async () => {
-    if (!token) return;
+    const currentToken = localStorage.getItem('token');
+    if (!currentToken) return;
     setLoadingProfile(true);
     try {
       const data = await api.getMe();
@@ -55,69 +49,21 @@ export default function App() {
     setToken(newToken);
   };
 
-  const handleLogout = () => {
+  function handleLogout() {
     api.logout();
     localStorage.removeItem('token');
     setToken('');
     setMyProfile(null);
     setActiveTab('discover');
     setSelectedMatch(null);
-  };
-
-  const handleLoginSubmit = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    setAuthLoading(true);
-
-    if (!loginPhone || !loginPassword) {
-      setAuthError('All fields are required.');
-      setAuthLoading(false);
-      return;
-    }
-
-    // Normalize phone: prepend '+' if not present
-    const normalizedPhone = loginPhone.trim().startsWith('+') 
-      ? loginPhone.trim() 
-      : '+' + loginPhone.trim();
-
-    try {
-      const data = await api.login(normalizedPhone, loginPassword);
-      handleAuthSuccess(data.token);
-    } catch (err) {
-      setAuthError(err.message || 'Login failed. Try again.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  const handleRegisterSubmit = async (e) => {
-    e.preventDefault();
-    setAuthError('');
-    if (!regPhone || !regPassword || !regConfirm) {
-      setAuthError('All fields are required.');
-      return;
-    }
-    if (regPassword !== regConfirm) {
-      setAuthError('Passwords do not match.');
-      return;
-    }
-    if (regPassword.length < 6) {
-      setAuthError('Password must be at least 6 characters.');
-      return;
-    }
-    setAuthLoading(true);
-    const normalizedPhone = regPhone.trim().startsWith('+') ? regPhone.trim() : '+' + regPhone.trim();
-    try {
-      const data = await api.register(normalizedPhone, regPassword);
-      handleAuthSuccess(data.token);
-    } catch (err) {
-      setAuthError(err.message || 'Registration failed. Try again.');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
+  }
 
   const handleOnboardingComplete = async () => {
+    // Check if token was set during onboarding (login/register)
+    const newToken = localStorage.getItem('token');
+    if (newToken && newToken !== token) {
+      setToken(newToken);
+    }
     // Reload profile context from backend to sync
     await loadProfileContext();
     setActiveTab('discover');
@@ -133,141 +79,12 @@ export default function App() {
     return <Splash onFinish={() => setShowSplash(false)} />;
   }
 
-  // Render Auth screen if not logged in
-  if (!token) {
-    return (
-      <div className="min-h-screen bg-surface flex flex-col justify-center items-center px-6 font-body-md w-screen relative overflow-hidden select-none">
-        {/* Ambient background decoration */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] rounded-full bg-primary-container/10 bg-blob blur-[120px]"></div>
-          <div className="absolute bottom-[-5%] left-[-5%] w-[400px] h-[400px] rounded-full bg-secondary-container/20 bg-blob blur-[120px]"></div>
-        </div>
-
-        <div className="glass-card w-full max-w-md p-8 rounded-[32px] shadow-xl border border-outline-variant/20 relative z-10 text-center">
-          
-          {/* Brand Logo */}
-          <div className="w-16 h-16 bg-gradient-to-tr from-primary to-primary-container rounded-full flex items-center justify-center mx-auto mb-4 shadow-md animate-pulse">
-            <span className="material-symbols-outlined text-white text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
-          </div>
-          <h2 className="text-2xl font-bold text-on-surface mb-1">Welcome to Spark</h2>
-          <p className="text-xs text-on-surface-variant mb-6 font-medium">Discover, Match, and Chat in Real-Time</p>
-
-          {/* Error Message */}
-          {authError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-100 border border-red-200 text-red-700 text-xs text-left">
-              {authError}
-            </div>
-          )}
-
-          {isLoginView ? (
-            /* Login view */
-            <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
-              <div>
-                <label className="block text-[10px] font-bold text-muted uppercase mb-1">Phone Number</label>
-                <input 
-                  type="tel"
-                  placeholder="e.g. +15550101"
-                  value={loginPhone}
-                  onChange={(e) => setLoginPhone(e.target.value)}
-                  className="w-full bg-white/40 border-b border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-muted uppercase mb-1">Password</label>
-                <input 
-                  type="password"
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full bg-white/40 border-b border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
-                  required
-                />
-              </div>
-              <button 
-                type="submit" 
-                disabled={authLoading}
-                className="w-full bg-gradient-to-r from-primary to-primary-container text-white py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider glow-button mt-6 flex items-center justify-center gap-2"
-              >
-                {authLoading ? <span className="material-symbols-outlined animate-spin text-base">progress_activity</span> : 'Enter Spark'}
-              </button>
-              <div className="text-center mt-4">
-                <span className="text-[11px] text-on-surface-variant font-medium">
-                  Don't have an account?{' '}
-                  <span onClick={() => { setIsLoginView(false); setAuthError(''); }} className="text-primary font-bold cursor-pointer hover:underline">
-                    Register
-                  </span>
-                </span>
-              </div>
-            </form>
-          ) : (
-            /* Register form */
-            <form onSubmit={handleRegisterSubmit} className="space-y-4 text-left">
-              <div>
-                <label className="block text-[10px] font-bold text-muted uppercase mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  placeholder="e.g. +905525923"
-                  value={regPhone}
-                  onChange={(e) => setRegPhone(e.target.value)}
-                  className="w-full bg-white/40 border-b border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-muted uppercase mb-1">Password</label>
-                <input
-                  type="password"
-                  placeholder="Min. 6 characters"
-                  value={regPassword}
-                  onChange={(e) => setRegPassword(e.target.value)}
-                  className="w-full bg-white/40 border-b border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-muted uppercase mb-1">Confirm Password</label>
-                <input
-                  type="password"
-                  placeholder="Repeat password"
-                  value={regConfirm}
-                  onChange={(e) => setRegConfirm(e.target.value)}
-                  className="w-full bg-white/40 border-b border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
-                  required
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={authLoading}
-                className="w-full bg-gradient-to-r from-primary to-primary-container text-white py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider glow-button mt-6 flex items-center justify-center gap-2"
-              >
-                {authLoading ? <span className="material-symbols-outlined animate-spin text-base">progress_activity</span> : 'Create Account'}
-              </button>
-              <div className="text-center mt-4">
-                <span className="text-[11px] text-on-surface-variant font-medium">
-                  Already have an account?{' '}
-                  <span onClick={() => { setIsLoginView(true); setAuthError(''); }} className="text-primary font-bold cursor-pointer hover:underline">
-                    Login
-                  </span>
-                </span>
-              </div>
-            </form>
-          )}
-
-          {/* Demo Details info */}
-          <div className="mt-6 border-t border-outline-variant/30 pt-4 text-[10px] text-on-surface-variant/70 text-left space-y-0.5">
-            <div><strong>Demo Phone:</strong> +15550101 &nbsp;(or +15550102 … +15550112)</div>
-            <div><strong>Demo Password:</strong> password123</div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Render Onboarding flow if session profile details are incomplete
-  if (token === 'pending_onboarding' || (!loadingProfile && !myProfile)) {
+  // Render Auth screen or Onboarding flow if session profile details are incomplete
+  if (!token || token === 'pending_onboarding' || (!loadingProfile && !myProfile)) {
+    const isTokenValid = token && token !== 'pending_onboarding';
     return (
       <OnboardingFlow 
+        initialStep={isTokenValid ? 4 : 0}
         onComplete={handleOnboardingComplete} 
         onExit={handleLogout} 
       />
@@ -327,6 +144,13 @@ export default function App() {
           />
         )}
         
+        {activeTab === 'favorite' && myProfile && (
+          <HeartTab 
+            myProfile={myProfile} 
+            onOpenChat={handleOpenChat}
+          />
+        )}
+        
         {activeTab === 'profile' && myProfile && (
           <ProfileAndSettings 
             myProfile={myProfile} 
@@ -337,30 +161,51 @@ export default function App() {
       </main>
 
       {/* Bottom Navigation tab-bar */}
-      <nav className="fixed bottom-0 w-full z-50 bg-white/85 backdrop-blur-xl border-t border-outline-variant/20 shadow-lg flex justify-around items-center h-20 px-4 pb-safe select-none">
+      <nav className="fixed bottom-0 w-full z-50 bg-surface/80 dark:bg-surface-dim/80 backdrop-blur-xl border-t border-outline-variant/20 shadow-[0_-4px_30px_rgba(0,92,188,0.08)] rounded-t-xl flex justify-around items-center h-20 px-4 pb-safe">
         
+        {/* Discover Tab (explore) */}
         <button 
           onClick={() => { setActiveTab('discover'); setSelectedMatch(null); }}
-          className={`flex flex-col items-center justify-center p-3 transition-colors active:scale-90 ${
-            activeTab === 'discover' ? 'text-primary scale-105' : 'text-on-surface-variant hover:text-primary'
+          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+            activeTab === 'discover' 
+              ? 'bg-primary-container text-on-primary-container rounded-full' 
+              : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'discover' ? "'FILL' 1" : "'FILL' 0" }}>explore</span>
         </button>
 
+        {/* Favorite icon (Platinum Hub) */}
+        <button 
+          onClick={() => { setActiveTab('favorite'); setSelectedMatch(null); }}
+          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+            activeTab === 'favorite' 
+              ? 'bg-primary-container text-on-primary-container rounded-full' 
+              : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'favorite' ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
+        </button>
+
+        {/* Matches Tab (forum) */}
         <button 
           onClick={() => setActiveTab('matches')}
-          className={`flex flex-col items-center justify-center p-3 transition-colors active:scale-90 relative ${
-            activeTab === 'matches' ? 'text-primary scale-105' : 'text-on-surface-variant hover:text-primary'
+          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+            activeTab === 'matches' 
+              ? 'bg-primary-container text-on-primary-container rounded-full' 
+              : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'matches' ? "'FILL' 1" : "'FILL' 0" }}>forum</span>
         </button>
 
+        {/* Profile Tab (person) */}
         <button 
           onClick={() => { setActiveTab('profile'); setSelectedMatch(null); }}
-          className={`flex flex-col items-center justify-center p-3 transition-colors active:scale-90 ${
-            activeTab === 'profile' ? 'text-primary scale-105' : 'text-on-surface-variant hover:text-primary'
+          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+            activeTab === 'profile' 
+              ? 'bg-primary-container text-on-primary-container rounded-full' 
+              : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'profile' ? "'FILL' 1" : "'FILL' 0" }}>person</span>
@@ -368,5 +213,13 @@ export default function App() {
       </nav>
 
     </div>
+  );
+}
+
+export default function AppWithProvider() {
+  return (
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   );
 }

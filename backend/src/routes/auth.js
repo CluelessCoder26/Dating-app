@@ -8,7 +8,7 @@ import { authenticateToken } from '../middleware/auth.middleware.js';
 const router = express.Router();
 
 const RegisterSchema = z.object({
-  phone: z.string().regex(/^\+?[1-9]\d{9,14}$/, 'Invalid phone number format. E.g. +15550199'),
+  phone: z.string().regex(/^\+?[1-9]\d{6,14}$/, 'Invalid phone number format. Must be between 7 and 15 digits.'),
   password: z.string().min(6, 'Password must be at least 6 characters')
 });
 

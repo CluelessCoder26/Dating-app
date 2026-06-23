@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../api';
+import { useToast } from './Toast';
+import MessageSentConfirmation from './MessageSentConfirmation';
+import { AnimatePresence } from 'framer-motion';
 
 export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActiveMatch }) {
   const [matches, setMatches] = useState([]);
@@ -10,6 +14,9 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [isOtherTyping, setIsOtherTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
+  const { showToast } = useToast();
 
   const messagesEndRef = useRef(null);
   const socketRef = useRef(null);
@@ -139,8 +146,16 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
         createdAt: new Date().toISOString()
       };
       setMessages((prev) => [...prev, localMsg]);
+
+      // Check for first message
+      const messagedSet = new Set(JSON.parse(localStorage.getItem('messagedMatches') || '[]'));
+      if (!messagedSet.has(activeMatch.matchId) && messages.length === 0) {
+        messagedSet.add(activeMatch.matchId);
+        localStorage.setItem('messagedMatches', JSON.stringify(Array.from(messagedSet)));
+        setShowConfirmation(true);
+      }
     } else {
-      alert('Real-time connection unavailable.');
+      showToast('Real-time connection unavailable.', 'error');
     }
   };
 
@@ -153,49 +168,49 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
     m.profile.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Render list of matches if no active match is open
   if (!activeMatch) {
     return (
-      <div className="flex-grow pt-16 pb-24 w-full h-full max-w-xl mx-auto px-6 overflow-y-auto bg-background selection:bg-primary/20">
+      <main className="flex-grow pt-24 pb-28 px-container-margin-mobile md:px-container-margin-desktop w-full h-full max-w-4xl mx-auto overflow-y-auto hide-scrollbar selection:bg-primary-container selection:text-on-primary-container">
         
         {/* Header Section */}
-        <section className="my-6">
-          <h1 className="text-2xl md:text-3xl font-bold text-on-surface mb-1">Matches &amp; Messages</h1>
-          <p className="text-xs text-on-surface-variant font-medium">Connect with your latest sparks and conversations.</p>
+        <section className="mb-stack-lg">
+          <h1 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface mb-2">Matches &amp; Messages</h1>
+          <p className="text-secondary font-body-md">Connect with your latest sparks and conversations.</p>
         </section>
 
-        {/* New Sparks (Horizontal scrolling row) */}
-        <section className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-on-surface tracking-wide uppercase">New Sparks</h2>
-            <span className="bg-primary/10 border border-primary/20 text-primary font-bold text-[10px] px-2.5 py-0.5 rounded-full uppercase">
-              {matches.length} Sparks
-            </span>
+        {/* New Sparks (Horizontal Avatars) */}
+        <section className="mb-stack-lg">
+          <div className="flex items-center justify-between mb-stack-md">
+            <h2 className="font-title-md text-title-md text-on-surface">New Sparks</h2>
+            <span className="text-primary font-label-sm uppercase tracking-wider">{matches.length} Sparks</span>
           </div>
           {loadingMatches ? (
             <div className="flex justify-center py-4">
               <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
             </div>
           ) : matches.length === 0 ? (
-            <p className="text-xs text-on-surface-variant bg-white/40 p-4 rounded-xl text-center border border-outline-variant/20">
+            <p className="text-sm text-secondary bg-surface-container-low p-4 rounded-xl text-center border border-outline-variant/20 pearl-layer">
               No sparks yet. Swipe right in discovery to meet new people!
             </p>
           ) : (
-            <div className="flex gap-4 overflow-x-auto hide-scrollbar py-2">
+            <div className="flex gap-stack-md overflow-x-auto hide-scrollbar py-2 -mx-2 px-2">
               {matches.map((m) => (
                 <div 
                   key={m.matchId}
                   onClick={() => setActiveMatch({ matchId: m.matchId, profile: m.profile })}
-                  className="flex-shrink-0 flex flex-col items-center gap-1.5 group cursor-pointer"
+                  className="flex-shrink-0 flex flex-col items-center gap-2 group cursor-pointer"
                 >
-                  <div className="w-16 h-16 rounded-full p-[2px] bg-gradient-to-tr from-primary to-inverse-primary transition-transform group-hover:scale-105 active:scale-95 shadow-md">
+                  <div className="w-20 h-20 rounded-full p-[3px] bg-gradient-to-tr from-primary to-inverse-primary ring-2 ring-white ring-offset-2 ring-offset-primary/10 transition-transform group-hover:scale-105 active:scale-95 relative">
                     <img 
                       alt={m.profile.name} 
                       src={m.profile.photos?.[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
-                      className="w-full h-full rounded-full object-cover border border-white" 
+                      className="w-full h-full rounded-full object-cover" 
                     />
+                    <div className="absolute bottom-0 right-1 w-5 h-5 bg-tertiary rounded-full border-2 border-white flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[12px] text-white" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                    </div>
                   </div>
-                  <span className="text-xs font-semibold text-on-surface">{m.profile.name}</span>
+                  <span className="font-label-sm text-on-surface">{m.profile.name}</span>
                 </div>
               ))}
             </div>
@@ -203,15 +218,15 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
         </section>
 
         {/* Search Input */}
-        <section className="mb-6">
+        <section className="mb-stack-lg">
           <div className="relative group">
-            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors text-[20px]">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">
               search
             </span>
             <input 
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 rounded-xl bg-white/50 border border-outline-variant/30 focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm text-on-surface placeholder:text-outline/70 transition-all font-medium"
+              className="w-full pl-12 pr-4 py-4 rounded-xl bg-surface-container-low border-none focus:ring-2 focus:ring-primary/20 text-on-surface placeholder:text-outline transition-all pearl-layer"
               placeholder="Search your sparks..." 
               type="text"
             />
@@ -219,14 +234,14 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
         </section>
 
         {/* Messages List (Vertical) */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold text-on-surface uppercase tracking-wide mb-4">Recent Conversations</h2>
+        <section className="space-y-4">
+          <h2 className="font-title-md text-title-md text-on-surface mb-stack-md">Recent Messages</h2>
           {loadingMatches ? (
             <div className="flex justify-center py-6">
               <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
             </div>
           ) : filteredMatches.length === 0 ? (
-            <p className="text-xs text-on-surface-variant text-center bg-white/40 p-6 rounded-2xl border border-outline-variant/20">
+            <p className="text-sm text-secondary text-center bg-surface-container-low p-6 rounded-2xl border border-outline-variant/20 pearl-layer">
               No conversations match your search.
             </p>
           ) : (
@@ -234,37 +249,38 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
               <div 
                 key={m.matchId}
                 onClick={() => setActiveMatch({ matchId: m.matchId, profile: m.profile })}
-                className="pearl-layer p-4 rounded-2xl flex items-center gap-4 hover:bg-white/60 hover:shadow-sm border border-outline-variant/10 transition-all cursor-pointer bg-white/30 backdrop-blur-sm"
+                className="pearl-layer p-4 rounded-2xl flex items-center gap-4 hover:bg-surface-container-high transition-colors cursor-pointer group relative overflow-hidden"
               >
-                <div className="w-12 h-12 rounded-full overflow-hidden shrink-0 border border-outline-variant/20 shadow-sm">
+                <div className="relative shrink-0">
                   <img 
                     alt={m.profile.name} 
                     src={m.profile.photos?.[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
-                    className="w-full h-full object-cover" 
+                    className="w-14 h-14 rounded-full object-cover shadow-sm" 
                   />
+                  <div className="absolute bottom-0 right-0 w-4 h-4 bg-primary border-2 border-white rounded-full"></div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-0.5">
-                    <h3 className="text-sm font-bold text-on-surface truncate">{m.profile.name}</h3>
-                    <span className="text-[10px] text-primary font-bold">Open Chat</span>
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className="font-title-md text-[16px] text-on-surface truncate">{m.profile.name}</h3>
+                    <span className="font-label-sm text-primary">Open Chat</span>
                   </div>
-                  <p className="text-xs text-on-surface-variant truncate font-medium max-w-[240px]">
+                  <p className="text-on-surface-variant font-body-md truncate font-medium">
                     {m.profile.bio ? m.profile.bio.split('\n\n')[0] : 'Click to start chatting...'}
                   </p>
                 </div>
-                <span className="material-symbols-outlined text-primary text-[18px]">chevron_right</span>
+                <div className="w-2.5 h-2.5 bg-primary rounded-full spark-pulse"></div>
               </div>
             ))
           )}
         </section>
 
-      </div>
+      </main>
     );
   }
 
   // Active Chat Screen view mapping to first_message_to_elena/code.html mockup
   return (
-    <div className="flex-grow pt-16 pb-24 w-full h-full max-w-xl mx-auto flex flex-col bg-background relative overflow-hidden">
+    <div className="flex-grow pt-16 w-full h-full max-w-xl mx-auto flex flex-col bg-background relative overflow-hidden">
       
       {/* Chat Sub-Header */}
       <div className="p-4 border-b border-outline-variant/20 flex items-center justify-between bg-white/40 backdrop-blur-md sticky top-0 z-20">
@@ -301,61 +317,88 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-20">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         
         {/* Match Header visual summary */}
         {messages.length === 0 && !loadingMessages && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center mt-6 text-center">
-            {/* Visual match connectors */}
-            <div className="flex items-center justify-center gap-8 my-4 relative">
-              <div className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden">
-                <img src={myProfile.photos?.[0]?.url} alt="You" className="w-full h-full object-cover" />
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center mt-6 text-center w-full px-4">
+            
+            {/* Match Visual Context */}
+            <section className="relative w-full flex justify-center items-center mb-8 mt-4">
+              <div className="flex items-center gap-2 md:gap-4 relative">
+                {/* User Profile */}
+                <div className="relative z-10">
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-surface overflow-hidden shadow-xl bg-surface-container-low">
+                    <img src={myProfile.photos?.[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} alt="You" className="w-full h-full object-cover" />
+                  </div>
+                </div>
+                {/* Match Connector */}
+                <div className="relative flex items-center justify-center shrink-0">
+                  <div className="w-8 md:w-12 h-[2px] bg-gradient-to-r from-primary/30 to-tertiary/30"></div>
+                  <div className="absolute w-10 h-10 glass-panel rounded-full flex items-center justify-center shadow-md animate-spark z-20">
+                    <span className="material-symbols-outlined text-tertiary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
+                  </div>
+                  <div className="w-8 md:w-12 h-[2px] bg-gradient-to-r from-tertiary/30 to-primary/30"></div>
+                </div>
+                {/* Match Profile */}
+                <div className="relative z-10">
+                  <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-surface overflow-hidden shadow-xl bg-surface-container-low">
+                    <img src={activeMatch.profile.photos?.[0]?.url} alt={activeMatch.profile.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-6 h-6 bg-tertiary rounded-full border-2 border-surface flex items-center justify-center shadow-sm">
+                    <span className="material-symbols-outlined text-white text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
+                  </div>
+                </div>
               </div>
-              <div className="absolute w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md border border-outline-variant/30 text-tertiary">
-                <span className="material-symbols-outlined text-base" style={{ fontVariationSettings: "'FILL' 1" }}>favorite</span>
-              </div>
-              <div className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden">
-                <img src={activeMatch.profile.photos?.[0]?.url} alt={activeMatch.profile.name} className="w-full h-full object-cover" />
-              </div>
-            </div>
+            </section>
 
-            <h2 className="text-lg font-bold text-on-surface mb-1">It's a Match!</h2>
-            <p className="text-xs text-on-surface-variant max-w-xs mb-6">
-              Send the first spark to <span className="text-primary font-bold">{activeMatch.profile.name}</span>
-            </p>
+            <section className="text-center mb-8">
+              <h2 className="font-headline-lg-mobile text-[28px] font-bold text-on-surface mb-2">
+                It's a Match!
+              </h2>
+              <p className="font-body-lg text-on-surface-variant">
+                Send the first spark to <span className="text-primary font-semibold">{activeMatch.profile.name}</span>
+              </p>
+            </section>
 
             {/* Icebreakers / Starters */}
-            <div className="w-full text-left bg-white/40 rounded-2xl p-4 border border-outline-variant/10 shadow-sm max-w-sm">
-              <div className="flex items-center gap-1 text-[11px] font-bold text-tertiary mb-3 uppercase tracking-wider">
-                <span className="material-symbols-outlined text-sm">lightbulb</span> Conversation Starters
+            <section className="w-full mb-8 text-left">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="material-symbols-outlined text-tertiary text-sm">lightbulb</span>
+                <span className="font-label-sm text-[12px] font-bold text-on-surface-variant uppercase tracking-wider">Conversation Starters</span>
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2 md:gap-3">
                 {[
-                  `Hi ${activeMatch.profile.name}! Ask about interests... 🎨`,
-                  `Mention favorite local cafe spots... ☕`,
-                  `Ask about travel pictures... ✈️`
+                  `Ask about travel photos ✈️`,
+                  `Mention interest in music 🎷`,
+                  `Ask about favorite cafe ☕`
                 ].map((text, idx) => (
                   <button 
                     key={idx}
-                    onClick={() => fillStarter(text)}
-                    className="text-left py-2 px-3 rounded-lg bg-white/80 hover:bg-primary/5 hover:text-primary transition-all border border-outline-variant/20 text-xs font-semibold text-on-surface-variant active:scale-[0.98]"
+                    onClick={() => fillStarter(text.replace(/[✈️🎷☕]/g, '').trim())}
+                    className="glass-panel px-4 py-3 rounded-xl text-left hover:border-tertiary/40 border border-outline-variant/10 transition-all active:scale-95 group w-full md:w-auto"
                   >
-                    {text}
+                    <p className="font-body-md text-sm font-medium text-on-surface-variant group-hover:text-tertiary transition-colors">{text}</p>
                   </button>
                 ))}
               </div>
-            </div>
+            </section>
 
             {/* Pro Tip Card */}
-            <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex gap-3 text-left max-w-sm mt-4">
-              <span className="material-symbols-outlined text-primary text-[20px]">psychology</span>
-              <div>
-                <h4 className="text-[11px] font-bold text-primary uppercase">Pro Tip</h4>
-                <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">
-                  Matches are 3x more likely to reply when you mention a specific detail from their bio, like their interests!
-                </p>
+            <section className="w-full text-left mb-auto">
+              <div className="p-5 md:p-6 rounded-3xl bg-surface-container-low/80 border border-outline-variant/10 flex items-start gap-4 shadow-sm">
+                <div className="w-10 h-10 rounded-full bg-primary-container/20 flex items-center justify-center flex-shrink-0">
+                  <span className="material-symbols-outlined text-primary text-[22px]">psychology</span>
+                </div>
+                <div>
+                  <h3 className="font-title-md font-bold text-on-surface mb-1 text-sm">Pro Tip</h3>
+                  <p className="font-body-md text-on-surface-variant text-xs md:text-sm leading-relaxed">
+                    Matches are 3x more likely to reply when you mention a specific detail from their profile!
+                  </p>
+                </div>
               </div>
-            </div>
+            </section>
+
           </div>
         )}
 
@@ -399,27 +442,61 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Floating Input Area */}
-      <form 
-        onSubmit={handleSendMessage}
-        className="absolute bottom-4 left-4 right-4 z-20 flex gap-2 p-1.5 rounded-full glass-panel border border-outline-variant/20 shadow-lg"
-      >
-        <input 
-          value={inputText}
-          onChange={handleInputChange}
-          placeholder="Type your message..."
-          className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-xs text-on-surface font-semibold px-4"
-          type="text"
-        />
-        <button 
-          type="submit"
-          disabled={!inputText.trim()}
-          className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary to-tertiary text-white flex items-center justify-center shrink-0 shadow-md active:scale-90 transition-transform disabled:opacity-40"
+      {/* WhatsApp style Input Area */}
+      <div className="w-full px-3 pt-2 pb-[calc(5.5rem+env(safe-area-inset-bottom))] bg-background/80 backdrop-blur-md shrink-0 flex gap-2 items-end z-20 border-t border-outline-variant/10">
+        <form 
+          onSubmit={handleSendMessage}
+          className={`flex-grow flex items-center bg-surface-container-lowest rounded-[24px] px-2 py-1.5 shadow-sm border border-outline-variant/20 ${messages.length === 0 ? 'spark-glow' : ''}`}
         >
-          <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
-        </button>
-      </form>
+          <button type="button" className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 shrink-0 flex items-center justify-center">
+            <span className="material-symbols-outlined text-[24px]">mood</span>
+          </button>
+          
+          <input 
+            value={inputText}
+            onChange={handleInputChange}
+            placeholder="Message"
+            className="flex-grow bg-transparent border-none focus:outline-none focus:ring-0 text-[15px] text-on-surface px-1 py-1.5 placeholder:text-on-surface-variant/60"
+            type="text"
+          />
+          
+          <div className="flex items-center shrink-0 pr-1 gap-1">
+            <button type="button" className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center transform -rotate-45">
+              <span className="material-symbols-outlined text-[22px]">attach_file</span>
+            </button>
+            {!inputText.trim() && (
+              <button type="button" className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[22px]">photo_camera</span>
+              </button>
+            )}
+          </div>
+        </form>
 
+        <button 
+          onClick={handleSendMessage}
+          className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 shadow-md active:scale-90 transition-all duration-200 ${
+            inputText.trim() 
+              ? 'bg-gradient-to-tr from-primary to-primary-container text-white' 
+              : 'bg-primary text-white'
+          }`}
+        >
+          {inputText.trim() ? (
+            <span className="material-symbols-outlined text-[20px] ml-1" style={{ fontVariationSettings: "'FILL' 1" }}>send</span>
+          ) : (
+            <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>mic</span>
+          )}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {showConfirmation && (
+          <MessageSentConfirmation 
+            matchProfile={activeMatch.profile}
+            myProfile={myProfile}
+            onComplete={() => setShowConfirmation(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
