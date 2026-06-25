@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { api } from '../api';
 import confetti from 'canvas-confetti';
+import MatchSuccess from './MatchSuccess';
 
 const DreamyBackground = () => {
   const [particles] = useState(() => Array.from({length: 15}).map(() => ({
@@ -568,7 +569,7 @@ export default function DiscoveryCanvas({ myProfile, onOpenChat, onOpenProfile }
 
       <AnimatePresence>
         {matchData && (
-          <MatchBloom 
+          <MatchSuccess 
             matchData={matchData} 
             myProfile={myProfile} 
             onOpenChat={onOpenChat}

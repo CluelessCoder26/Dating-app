@@ -5,7 +5,7 @@ import { useToast } from './Toast';
 import MessageSentConfirmation from './MessageSentConfirmation';
 import { AnimatePresence } from 'framer-motion';
 
-export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActiveMatch }) {
+export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActiveMatch, onBackToDiscovery }) {
   const [matches, setMatches] = useState([]);
   const [activeMatch, setActiveMatch] = useState(activeMatchInfo || null); // { matchId, profile }
   const [messages, setMessages] = useState([]);
@@ -494,6 +494,12 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
             matchProfile={activeMatch.profile}
             myProfile={myProfile}
             onComplete={() => setShowConfirmation(false)}
+            onViewAllMatches={() => {
+              setShowConfirmation(false);
+              setActiveMatch(null);
+              onClearActiveMatch();
+            }}
+            onBackToDiscovery={onBackToDiscovery || (() => setShowConfirmation(false))}
           />
         )}
       </AnimatePresence>

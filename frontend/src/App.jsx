@@ -141,6 +141,10 @@ function App() {
             myProfile={myProfile} 
             activeMatchInfo={selectedMatch}
             onClearActiveMatch={() => setSelectedMatch(null)}
+            onBackToDiscovery={() => {
+              setActiveTab('discover');
+              setSelectedMatch(null);
+            }}
           />
         )}
         
