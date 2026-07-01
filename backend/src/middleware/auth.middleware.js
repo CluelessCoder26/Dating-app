@@ -1,18 +1,20 @@
-import jwt from 'jsonwebtoken';
+import { jwtService } from '../services/jwt.service.js';
+import { AuthenticationError } from '../utils/errors.js';
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // "Bearer TOKEN"
 
   if (!token) {
-    return res.status(401).json({ error: 'Access token missing or malformed' });
+    return next(new AuthenticationError('Access token missing or malformed'));
   }
 
-  jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret_key_123', (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Access token invalid or expired' });
-    }
+  try {
+    const user = jwtService.verifyAccessToken(token);
     req.userId = user.userId;
+    req.userRole = user.role;
     next();
-  });
+  } catch (err) {
+    next(err);
+  }
 }

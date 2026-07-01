@@ -24,6 +24,11 @@ try {
 
 console.log('BullMQ Background Worker starting up...');
 
+if (process.env.USE_REDIS === 'false') {
+  console.log('⚠️ USE_REDIS is false. Background workers disabled.');
+  process.exit(0);
+}
+
 // 1. Worker for ELO recalculations
 const eloWorker = new Worker('eloQueue', async (job) => {
   const { swiperId, targetId, rating } = job.data;
@@ -74,16 +79,18 @@ const eloWorker = new Worker('eloQueue', async (job) => {
 
 // 2. Worker for asynchronous message database writes
 const msgWorker = new Worker('msgPersistenceQueue', async (job) => {
-  const { matchId, senderId, text, isImage } = job.data;
+  const { id, matchId, senderId, text, isImage, createdAt } = job.data;
   console.log(`[msgPersistenceQueue] Saving chat message: Match ${matchId} | Sender ${senderId}`);
 
   try {
     const newMessage = await prisma.message.create({
       data: {
+        id,
         matchId,
         senderId,
         text,
-        isImage: !!isImage
+        isImage: !!isImage,
+        createdAt
       }
     });
     console.log(`[msgPersistenceQueue] Success: Saved message ID ${newMessage.id}`);

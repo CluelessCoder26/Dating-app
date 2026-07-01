@@ -75,8 +75,8 @@ const PRE_DEFINED_MOCK_PHOTOS = [
 
 const STEP_CONTENT = {
   0: { title: "Welcome Back", subtitle: "Sign in to ignite your spark." },
-  1: { title: "Meet Someone Unforgettable", subtitle: "Your journey to a meaningful connection begins here." },
-  2: { title: "Secure Verification", subtitle: "We sent a secure code to your number." },
+  1: { title: "Create Your Account", subtitle: "Your journey to a meaningful connection begins here." },
+  2: { title: "Secure Verification", subtitle: "We sent a secure code to your email." },
   3: { title: "Protect Your Account", subtitle: "Set a secure password for your new profile." },
   4: { title: "What's Your Name?", subtitle: "This will be displayed on your profile." },
   5: { title: "When Is Your Birthday?", subtitle: "You must be 18 or older to join Spark." },
@@ -90,6 +90,19 @@ const STEP_CONTENT = {
 };
 
 /* ─── Reusable UI Components ─────────────────────────────────────────────── */
+
+const LogoBadge = () => (
+  <div className="flex justify-center mb-8 mt-2">
+    <div className="w-24 h-24 md:w-32 md:h-32 rounded-full flex items-center justify-center relative bg-white/10 backdrop-blur-xl border border-white/20 shadow-2xl z-10">
+      <span
+        className="material-symbols-outlined text-[48px] md:text-[64px] bg-clip-text text-transparent bg-gradient-to-r from-[#2563eb] to-[#7c3aed]"
+        style={{ fontVariationSettings: "'FILL' 1" }}
+      >
+        auto_awesome
+      </span>
+    </div>
+  </div>
+);
 
 const FloatingParticles = () => {
   const [particles] = useState(() => Array.from({ length: 20 }).map(() => ({
@@ -415,6 +428,8 @@ export default function OnboardingFlow({ onComplete, onExit }) {
   const [step, setStep] = useState(0);
   const [successMode, setSuccessMode] = useState(null); // 'login' | 'signup'
 
+  const [identifier, setIdentifier] = useState('');
+  const [email, setEmail] = useState('');
   const [countryCode, setCountryCode] = useState('+1');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -448,47 +463,56 @@ export default function OnboardingFlow({ onComplete, onExit }) {
 
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    const cleanPhone = phone.replace(/\s+/g, '');
-    if (!/^\d{7,14}$/.test(cleanPhone)) return triggerError('Please enter a valid phone number.');
+    if (!identifier.trim()) return triggerError('Please enter your email or phone.');
     if (password.length < 6) return triggerError('Please enter your password.');
     
     setLoading(true);
     try {
-      const fullPhoneNumber = `${countryCode}${cleanPhone}`;
-      await api.login(fullPhoneNumber, password);
+      await api.login(identifier, password);
       setSuccessMode('login');
     } catch (err) {
-      triggerError(err.message || 'Login failed. Check your credentials.');
+      if (err.message && err.message.includes('verify your email')) {
+        setEmail(err.unverifiedEmail || identifier); // Best effort
+        setStep(2);
+      } else {
+        triggerError(err.message || 'Login failed. Check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePhoneSubmit = async (e) => {
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     const cleanPhone = phone.replace(/\s+/g, '');
     if (!/^\d{7,14}$/.test(cleanPhone)) return triggerError('Please enter a valid phone number.');
+    if (!email || !email.includes('@')) return triggerError('Please enter a valid email address.');
+    if (password.length < 6) return triggerError('Password must be at least 6 characters.');
+    
     setLoading(true);
-    setTimeout(() => { setLoading(false); handleNext(); }, 1200);
+    try {
+      const fullPhoneNumber = `${countryCode}${cleanPhone}`;
+      await api.register(fullPhoneNumber, email, password);
+      setStep(2);
+    } catch (err) {
+      triggerError(err.message || 'Registration failed. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleOtpVerify = async (e) => {
     e.preventDefault();
-    if (otp.join('').length !== 6) return triggerError('Please enter the 6-digit verification code.');
-    setLoading(true);
-    setTimeout(() => { setLoading(false); handleNext(); }, 1200);
-  };
-
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    if (password.length < 6) return triggerError('Password must be at least 6 characters');
+    const code = otp.join('');
+    if (code.length !== 6) return triggerError('Please enter the 6-digit verification code.');
+    
     setLoading(true);
     try {
-      const fullPhoneNumber = `${countryCode}${phone.replace(/\s+/g, '')}`;
-      await api.register(fullPhoneNumber, password);
-      handleNext();
+      await api.verifyOtp(email, code);
+      // Skip step 3 (Password) since we collected it during register
+      setStep(4);
     } catch (err) {
-      triggerError(err.message || 'Registration failed. Try again.');
+      triggerError(err.message || 'Invalid or expired code.');
     } finally {
       setLoading(false);
     }
@@ -663,10 +687,8 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                 {/* ── STEP 0: Login ── */}
                 {step === 0 && (
                   <form onSubmit={handleLoginSubmit} className="space-y-6">
-                    <div className="flex gap-3">
-                      <div className="w-[120px]"><CountryDropdown value={countryCode} onChange={setCountryCode} /></div>
-                      <div className="flex-1"><GlassInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="000 000 0000" required /></div>
-                    </div>
+                    <LogoBadge />
+                    <GlassInput icon="person" type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="Email or Mobile Number" required />
                     <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required />
                     <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Login</PrimaryButton>
                     <div className="text-center pt-2">
@@ -678,14 +700,18 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                   </form>
                 )}
 
-                {/* ── STEP 1: Phone Registration ── */}
+                {/* ── STEP 1: Registration ── */}
                 {step === 1 && (
-                  <form onSubmit={handlePhoneSubmit} className="space-y-6">
+                  <form onSubmit={handleRegisterSubmit} className="space-y-6">
+                    <LogoBadge />
                     <div className="flex gap-3">
                       <div className="w-[120px]"><CountryDropdown value={countryCode} onChange={setCountryCode} /></div>
-                      <div className="flex-1"><GlassInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="000 000 0000" required /></div>
+                      <div className="flex-1"><GlassInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile Number" required /></div>
                     </div>
-                    <p className="text-[13px] font-medium text-white/60 flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">lock</span> Verification is private and secure.</p>
+                    <GlassInput icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email Address (for OTP Verification)" required />
+                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (min 6 chars)" required />
+                    
+                    <p className="text-[13px] font-medium text-white/60 flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">lock</span> Verification code will be sent to your email.</p>
                     <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Continue</PrimaryButton>
                     <div className="text-center pt-2">
                       <p className="text-[15px] font-medium text-white/70">
@@ -699,6 +725,7 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                 {/* ── STEP 2: OTP ── */}
                 {step === 2 && (
                   <form onSubmit={handleOtpVerify} className="space-y-8">
+                    <p className="text-center text-white/80 font-medium mb-4">Code sent to <strong>{email}</strong></p>
                     <div className="flex justify-between gap-2">
                       {otp.map((val, idx) => (
                         <input
@@ -714,17 +741,14 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                     </div>
                     <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Verify Code</PrimaryButton>
                     <p className="text-[14px] text-center text-white/70 font-medium">
-                      Didn't receive code? <button type="button" className="font-bold text-white hover:text-blue-400 transition-colors">Resend (0:59)</button>
+                      Didn't receive code? <button type="button" className="font-bold text-white hover:text-blue-400 transition-colors">Check your spam folder</button>
                     </p>
                   </form>
                 )}
 
-                {/* ── STEP 3: Password ── */}
+                {/* ── STEP 3: Deprecated (Skipped) ── */}
                 {step === 3 && (
-                  <form onSubmit={handlePasswordSubmit} className="space-y-6">
-                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required />
-                    <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Create Account</PrimaryButton>
-                  </form>
+                  <div className="text-center text-white">Redirecting...</div>
                 )}
 
                 {/* ── STEP 4: Name ── */}

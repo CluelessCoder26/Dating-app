@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken';
 import { Queue } from 'bullmq';
 import { PrismaClient } from '../../backend/node_modules/@prisma/client/index.js';
 import dotenv from 'dotenv';
+import crypto from 'crypto';
 
 dotenv.config();
 
@@ -26,6 +27,9 @@ const io = new Server(httpServer, {
 const redisUrlStr = process.env.REDIS_URL || 'redis://localhost:6379';
 const pubClient = createClient({ url: redisUrlStr });
 const subClient = pubClient.duplicate();
+
+pubClient.on('error', () => {});
+subClient.on('error', () => {});
 
 // In-Memory online user tracker fallback if Redis is offline
 const localOnlineUsers = new Set();
@@ -76,8 +80,16 @@ try {
 }
 
 // BullMQ Queues in WebSocket
-const msgPersistenceQueue = new Queue('msgPersistenceQueue', { connection: connectionConfig });
-const pushNotificationQueue = new Queue('pushNotificationQueue', { connection: connectionConfig });
+let msgPersistenceQueue = { add: async () => { throw new Error('Redis disabled'); } };
+let pushNotificationQueue = { add: async () => { throw new Error('Redis disabled'); } };
+
+if (process.env.USE_REDIS !== 'false') {
+  msgPersistenceQueue = new Queue('msgPersistenceQueue', { connection: connectionConfig });
+  pushNotificationQueue = new Queue('pushNotificationQueue', { connection: connectionConfig });
+  
+  msgPersistenceQueue.on('error', () => {});
+  pushNotificationQueue.on('error', () => {});
+}
 
 // Socket Authentication Handshake
 io.use((socket, next) => {
@@ -127,8 +139,9 @@ io.on('connection', async (socket) => {
   socket.on('send_msg', async ({ matchId, targetUserId, text, isImage }) => {
     if (!matchId || !text) return;
 
-    const roomName = `match_${matchId}`;
+    const msgId = crypto.randomUUID();
     const msgPayload = {
+      id: msgId,
       matchId,
       senderId: socket.userId,
       text,
@@ -136,26 +149,30 @@ io.on('connection', async (socket) => {
       createdAt: new Date().toISOString()
     };
 
-    // 1. Broadcast the message to the socket room instantly
-    io.to(roomName).emit('recv_msg', msgPayload);
+    // 1. Emit the message ONLY to the recipient's personal room instantly
+    io.to(`user_${targetUserId}`).emit('recv_msg', msgPayload);
 
     // 2. Queue asynchronous database write job (fallback to sync DB if Redis down)
     try {
       await msgPersistenceQueue.add('persist_msg', {
+        id: msgId,
         matchId,
         senderId: socket.userId,
         text,
-        isImage: !!isImage
+        isImage: !!isImage,
+        createdAt: msgPayload.createdAt
       });
     } catch (err) {
       console.warn('⚠️ Failed to queue message persistence on Redis, writing synchronously to database:', err.message);
       try {
         await prisma.message.create({
           data: {
+            id: msgId,
             matchId,
             senderId: socket.userId,
             text,
-            isImage: !!isImage
+            isImage: !!isImage,
+            createdAt: msgPayload.createdAt
           }
         });
         console.log('[Sync Msg Fallback] Successfully persisted message to database.');
@@ -189,28 +206,32 @@ io.on('connection', async (socket) => {
 
 // Run server after database adapter connections are ready
 (async () => {
-  try {
-    console.log('Connecting to Redis Cache...');
-    await Promise.all([
-      pubClient.connect().catch(e => { throw new Error('pubClient: ' + e.message) }),
-      subClient.connect().catch(e => { throw new Error('subClient: ' + e.message) })
-    ]);
-    io.adapter(createAdapter(pubClient, subClient));
-    console.log('Socket.io scaling Redis adapter connected.');
+  if (process.env.USE_REDIS !== 'false') {
+    try {
+      console.log('Connecting to Redis Cache...');
+      await Promise.all([
+        pubClient.connect().catch(e => { throw new Error('pubClient: ' + e.message) }),
+        subClient.connect().catch(e => { throw new Error('subClient: ' + e.message) })
+      ]);
+      io.adapter(createAdapter(pubClient, subClient));
+      console.log('Socket.io scaling Redis adapter connected.');
 
-    // Subscribe to match_events PubSub channel
-    await subClient.subscribe('match_events', (message) => {
-      try {
-        const event = JSON.parse(message);
-        console.log('[Redis Match Event Received]:', event);
-        io.to(`user_${event.user1Id}`).emit('match_created', event);
-        io.to(`user_${event.user2Id}`).emit('match_created', event);
-      } catch (subErr) {
-        console.error('Error processing match PubSub message:', subErr);
-      }
-    });
-  } catch (err) {
-    console.warn('⚠️ Redis connection failed. Falling back to default In-Memory Socket Adapter. Detail:', err.message);
+      // Subscribe to match_events PubSub channel
+      await subClient.subscribe('match_events', (message) => {
+        try {
+          const event = JSON.parse(message);
+          console.log('[Redis Match Event Received]:', event);
+          io.to(`user_${event.user1Id}`).emit('match_created', event);
+          io.to(`user_${event.user2Id}`).emit('match_created', event);
+        } catch (subErr) {
+          console.error('Error processing match PubSub message:', subErr);
+        }
+      });
+    } catch (err) {
+      console.warn('⚠️ Redis connection failed. Falling back to default In-Memory Socket Adapter. Detail:', err.message);
+    }
+  } else {
+    console.log('⚠️ USE_REDIS is false. Using default In-Memory Socket Adapter.');
   }
 
   httpServer.listen(PORT, () => {

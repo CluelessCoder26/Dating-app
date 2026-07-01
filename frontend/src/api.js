@@ -48,10 +48,10 @@ async function request(endpoint, options = {}) {
 
 export const api = {
   // Auth
-  async login(phone, password) {
+  async login(identifier, password) {
     const data = await request('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ phone, password })
+      body: JSON.stringify({ identifier, password })
     });
     if (data.token) {
       localStorage.setItem('token', data.token);
@@ -59,10 +59,17 @@ export const api = {
     return data;
   },
 
-  async register(phone, password) {
-    const data = await request('/auth/register', {
+  async register(phone, email, password) {
+    return request('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ phone, password })
+      body: JSON.stringify({ phone, email, password })
+    });
+  },
+
+  async verifyOtp(email, code) {
+    const data = await request('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, code })
     });
     if (data.token) {
       localStorage.setItem('token', data.token);

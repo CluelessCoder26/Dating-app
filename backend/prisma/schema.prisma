@@ -1,6 +1,7 @@
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -8,45 +9,191 @@ generator client {
 }
 
 model User {
-  id           String    @id @default(uuid())
-  phone        String    @unique
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  profile      Profile?
+  id                  String         @id @default(uuid())
+  phone               String         @unique
+  email               String?        @unique
+  emailVerified       Boolean        @default(false)
+  passwordHash        String
+  role                String         @default("user") // "user", "admin", "moderator"
+  status              String         @default("active") // "active", "locked", "banned"
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int            @default(0)
+  lockoutUntil        DateTime?
+  
+  onboardingStep      String         @default("start") // "start", "profile", "preferences", "photos", "complete"
+  onboardingComplete  Boolean        @default(false)
+  deactivatedAt       DateTime?
+  deletedAt           DateTime?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  profile             Profile?
+  preferences         Preference?
+  settings            Setting?
+  refreshTokens       RefreshToken[]
+  discoveryMetrics    DiscoveryMetric[]
+}
+
+model Otp {
+  id        String   @id @default(uuid())
+  email     String
+  code      String
+  type      String   @default("verification") // "verification", "password_reset"
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email, type])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  deviceId  String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model LoginAttempt {
+  id         String   @id @default(uuid())
+  identifier String
+  ipAddress  String
+  successful Boolean
+  reason     String?
+  timestamp   DateTime @default(now())
+}
+
+model DiscoveryMetric {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String   // "requested", "served", "viewed", "skipped"
+  targetId   String?  // The candidate ID if applicable
+  cacheHit   Boolean  @default(false)
+  timestamp  DateTime @default(now())
+}
+
+model SecurityAudit {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  ipAddress String?
+  details   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
 }
 
 model Profile {
-  id         String   @id @default(uuid())
-  userId     String   @unique
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name       String
-  age        Int
-  gender     String   // "male", "female", "non-binary"
-  preference String   // "male", "female", "everyone"
-  bio        String?
-  latitude   Float    // PostGIS operations will use raw queries on these
-  longitude  Float
-  elo        Int      @default(1200)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  photos     Photo[]
+  id                  String   @id @default(uuid())
+  userId              String   @unique
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name                String
+  age                 Int
+  gender              String   // "male", "female", "non-binary"
+  preference          String   // "male", "female", "everyone" (deprecated, moved to Preference model, but kept for compatibility)
+  bio                 String?
+  occupation          String?
+  education           String?
+  company             String?
+  height              Int?     // in cm
+  languages           String[] // Array of strings
+  interests           String[] // Array of strings
+  relationshipGoals   String?
+  lifestyle           String?
+  hometown            String?
+  currentCity         String?
+  latitude            Float?   // Optional now to allow onboarding without location immediately
+  longitude           Float?
+  elo                 Int      @default(1200)
+  completionScore     Int      @default(0) // 0-100
+  profileQualityScore Int      @default(0) // 0-100
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  photos              Photo[]
+}
+
+model Preference {
+  id                   String   @id @default(uuid())
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  preferredGender      String   @default("everyone") // "male", "female", "everyone"
+  minAge               Int      @default(18)
+  maxAge               Int      @default(99)
+  maxDistance          Int      @default(50) // in miles or km
+  relationshipType     String?
+  lifestylePreferences String[]
+  visibility           String   @default("public") // "public", "hidden"
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model Setting {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  showOnlineStatus Boolean  @default(true)
+  showDistance     Boolean  @default(true)
+  showAge          Boolean  @default(true)
+  incognitoMode    Boolean  @default(false)
+  privacySettings  String?  // JSON string or structured field for extra privacy toggles
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Photo {
-  id        String   @id @default(uuid())
-  profileId String
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  url       String
-  isPrimary Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id           String             @id @default(uuid())
+  profileId    String
+  profile      Profile            @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  url          String
+  key          String?            // Storage provider key
+  isPrimary    Boolean            @default(false)
+  blurHash     String?
+  order        Int                @default(0)
+  size         Int?
+  mimeType     String?
+  verification PhotoVerification?
+  createdAt    DateTime           @default(now())
+}
+
+model PhotoVerification {
+  id                  String   @id @default(uuid())
+  photoId             String   @unique
+  photo               Photo    @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  status              String   @default("pending") // pending, approved, rejected, manual_review
+  trustScore          Int?     // 0-100
+  faceCount           Int?
+  qualityScore        Int?     // 0-100
+  blurScore           Int?     // 0-100
+  brightnessScore     Int?     // 0-100
+  aiProbability       Float?   // 0.0 - 1.0
+  nsfwScore           Float?   // 0.0 - 1.0
+  violenceScore       Float?   // 0.0 - 1.0
+  watermarkScore      Float?   // 0.0 - 1.0
+  duplicateScore      Float?   // 0.0 - 1.0
+  embeddingReference  String?  // UUID referencing vector db or raw embedding
+  modelVersions       String?  // JSON string tracing AI models used
+  providerName        String?  // Identity of the AI Provider (e.g. 'mock', 'aws', 'google')
+  executionTimeMs     Int?     // Execution time in milliseconds
+  failureReasons      String[] // Array of rejection reasons
+  verificationTime    DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model Swipe {
   id        String   @id @default(uuid())
   swiperId  String
   targetId  String
-  rating    String   // "like" or "nope"
+  rating    String   // "LIKE", "PASS", "SUPER_LIKE", "BOOST", "REWIND"
   createdAt DateTime @default(now())
 
   @@unique([swiperId, targetId])
@@ -58,23 +205,117 @@ model Match {
   id        String   @id @default(uuid())
   user1Id   String
   user2Id   String
+  metadata  MatchMetadata?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([user1Id])
+  @@index([user2Id])
+  @@unique([user1Id, user2Id])
+}
+
+model MatchMetadata {
+  id                 String   @id @default(uuid())
+  matchId            String   @unique
+  match              Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  compatibilityScore Float?   // Calculated upon match
+  trustScoreAvg      Float?
+  distance           Float?
+  interestSimilarity Float?
+  eloDifference      Int?
+  createdAt          DateTime @default(now())
+}
+
+model Relationship {
+  id        String   @id @default(uuid())
+  user1Id   String   // Convention: lower UUID first for uniqueness without duplicating
+  user2Id   String
+  status    String   // "UNKNOWN", "VIEWED", "LIKED", "PASSED", "MATCHED", "BLOCKED", "REPORTED"
+  updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 
+  @@unique([user1Id, user2Id])
   @@index([user1Id])
   @@index([user2Id])
 }
 
-model Message {
+model InteractionHistory {
   id        String   @id @default(uuid())
-  matchId   String
-  senderId  String
-  text      String
-  isImage   Boolean  @default(false)
-  read      Boolean  @default(false)
+  actorId   String
+  targetId  String
+  action    String   // "SWIPE_LIKE", "SWIPE_PASS", "BLOCK", "REPORT", "VIEW"
+  metadata  String?  // JSON context (latency, rule triggers)
   createdAt DateTime @default(now())
 
-  @@index([matchId])
+  @@index([actorId])
+  @@index([targetId])
+  @@index([action])
+}
+
+model Conversation {
+  id            String         @id @default(uuid())
+  matchId       String?        @unique // Optional if a conversation isn't strictly tied to a match (e.g. support chat)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  lastMessageId String?
+  participants  Participant[]
+  messages      Message[]
+}
+
+model Participant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  isArchived     Boolean      @default(false)
+  isPinned       Boolean      @default(false)
+  isMuted        Boolean      @default(false)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String         @id @default(uuid())
+  conversationId String
+  conversation   Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  type           String         @default("TEXT") // "TEXT", "IMAGE", "VOICE", "VIDEO", "LOCATION"
+  content        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  attachments    Attachment[]
+  statuses       MessageStatus[]
+
+  @@index([conversationId])
   @@index([createdAt])
+  @@index([senderId])
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  type      String   // "IMAGE", "VIDEO", "DOCUMENT", "VOICE"
+  mimeType  String?
+  size      Int?
+  createdAt DateTime @default(now())
+}
+
+model MessageStatus {
+  id          String   @id @default(uuid())
+  messageId   String
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId      String   // The recipient whose status this represents
+  status      String   // "SENT", "DELIVERED", "READ", "FAILED"
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId, status])
 }
 
 model Block {

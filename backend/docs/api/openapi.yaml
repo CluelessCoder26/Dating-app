@@ -1,0 +1,871 @@
+openapi: 3.0.0
+info:
+  title: Spark Dating API
+  version: 1.0.0
+  description: API documentation for the Spark Dating backend
+servers:
+  - url: http://localhost:5000
+    description: Development Server
+  - url: http://localhost:5010
+    description: RC1 Server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ValidationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Validation failed
+    AuthenticationError:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Authentication token invalid or expired
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+        status:
+          type: string
+        onboardingStep:
+          type: string
+        onboardingComplete:
+          type: boolean
+    Profile:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        name:
+          type: string
+        age:
+          type: integer
+        gender:
+          type: string
+        preference:
+          type: string
+        bio:
+          type: string
+        occupation:
+          type: string
+        education:
+          type: string
+        company:
+          type: string
+        height:
+          type: integer
+        languages:
+          type: array
+          items:
+            type: string
+        interests:
+          type: array
+          items:
+            type: string
+        relationshipGoals:
+          type: string
+        lifestyle:
+          type: string
+        hometown:
+          type: string
+        currentCity:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        elo:
+          type: integer
+        completionScore:
+          type: integer
+    Preference:
+      type: object
+      properties:
+        preferredGender:
+          type: string
+        minAge:
+          type: integer
+        maxAge:
+          type: integer
+        maxDistance:
+          type: integer
+        relationshipType:
+          type: string
+        lifestylePreferences:
+          type: array
+          items:
+            type: string
+        visibility:
+          type: string
+    Setting:
+      type: object
+      properties:
+        showOnlineStatus:
+          type: boolean
+        showDistance:
+          type: boolean
+        showAge:
+          type: boolean
+        incognitoMode:
+          type: boolean
+        privacySettings:
+          type: string
+    Photo:
+      type: object
+      properties:
+        id:
+          type: string
+        profileId:
+          type: string
+        url:
+          type: string
+        isPrimary:
+          type: boolean
+    Match:
+      type: object
+      properties:
+        id:
+          type: string
+        user1Id:
+          type: string
+        user2Id:
+          type: string
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+        matchId:
+          type: string
+        senderId:
+          type: string
+        text:
+          type: string
+        isImage:
+          type: boolean
+        read:
+          type: boolean
+    JWTResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        refreshToken:
+          type: string
+        message:
+          type: string
+security:
+  - bearerAuth: []
+paths:
+  /:
+    get:
+      summary: Root check
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Welcome message
+  /health:
+    get:
+      summary: System health
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Health payload
+  /version:
+    get:
+      summary: System version
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Version payload
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                phone:
+                  type: string
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '201':
+          description: Registration successful, OTP sent
+  /api/auth/verify-otp:
+    post:
+      summary: Verify OTP
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                code:
+                  type: string
+      responses:
+        '200':
+          description: OTP verified successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JWTResponse'
+  /api/auth/login:
+    post:
+      summary: Login user
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                identifier:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Logged in successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JWTResponse'
+  /api/auth/refresh:
+    post:
+      summary: Refresh JWT token
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Tokens refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JWTResponse'
+  /api/auth/logout:
+    post:
+      summary: Logout current device
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Logged out
+  /api/auth/logout-all:
+    post:
+      summary: Logout all devices
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Logged out all
+  /api/auth/me:
+    get:
+      summary: Get current authenticated user profile
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+  /api/profile/onboarding:
+    get:
+      summary: Get onboarding status
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: Onboarding status
+    put:
+      summary: Update onboarding status
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                step:
+                  type: string
+                isComplete:
+                  type: boolean
+      responses:
+        '200':
+          description: Status updated
+  /api/profile:
+    get:
+      summary: Get own profile
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: Profile data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+    post:
+      summary: Create profile
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Profile'
+      responses:
+        '200':
+          description: Profile created
+    put:
+      summary: Update profile
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Profile'
+      responses:
+        '200':
+          description: Profile updated
+  /api/profile/location:
+    put:
+      summary: Update user location
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                longitude:
+                  type: number
+      responses:
+        '200':
+          description: Location updated
+  /api/profile/preferences:
+    get:
+      summary: Get user preferences
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: User preferences
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Preference'
+    put:
+      summary: Update preferences
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Preference'
+      responses:
+        '200':
+          description: Preferences updated
+  /api/profile/settings:
+    get:
+      summary: Get user settings
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: User settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Setting'
+    put:
+      summary: Update settings
+      tags:
+        - Profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Setting'
+      responses:
+        '200':
+          description: Settings updated
+  /api/profile/deactivate:
+    post:
+      summary: Deactivate account
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: Account deactivated
+  /api/profile/{userId}:
+    get:
+      summary: Get a specific user profile
+      tags:
+        - Profile
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Profile'
+    delete:
+      summary: Soft delete account
+      tags:
+        - Profile
+      responses:
+        '200':
+          description: Account deleted
+  /api/photos/upload:
+    post:
+      summary: Upload a photo
+      tags:
+        - Photos
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+                  description: "Image file to upload (JPEG, PNG, WEBP max 10MB)"
+                isPrimary:
+                  type: boolean
+                  description: "Flag to set this photo as primary profile photo"
+      responses:
+        '201':
+          description: Photo uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Photo'
+  /api/photos:
+    get:
+      summary: Get all photos for the current user
+      tags:
+        - Photos
+      responses:
+        '200':
+          description: List of photos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Photo'
+    post:
+      summary: (Backward compatible) Upload a photo
+      tags:
+        - Photos
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                photo:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: Photo uploaded successfully
+  /api/photos/{id}:
+    delete:
+      summary: Delete a photo
+      tags:
+        - Photos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Photo deleted successfully
+  /api/photos/primary:
+    patch:
+      summary: Set a photo as primary
+      tags:
+        - Photos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                photoId:
+                  type: string
+      responses:
+        '200':
+          description: Primary photo updated
+  /api/photos/verification:
+    get:
+      summary: Get AI verification status for primary photo
+      tags:
+        - Photos
+      responses:
+        '200':
+          description: PhotoVerification status
+  /api/photos/trust-score:
+    get:
+      summary: Get profile trust score based on AI verification
+      tags:
+        - Photos
+      responses:
+        '200':
+          description: Trust score data
+  /api/discovery:
+    get:
+      summary: Get ranked discovery feed
+      tags:
+        - Discovery
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Ranked list of candidate profiles
+  /api/discovery/preferences:
+    get:
+      summary: Get discovery preferences
+      tags:
+        - Discovery
+      responses:
+        '200':
+          description: Preferences retrieved
+    patch:
+      summary: Update discovery preferences
+      tags:
+        - Discovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Preferences updated
+  /api/discovery/stats:
+    post:
+      summary: Track discovery action
+      tags:
+        - Discovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                targetId:
+                  type: string
+      responses:
+        '200':
+          description: Action tracked
+  /api/interactions/swipe:
+    post:
+      summary: Swipe on a user (LIKE, PASS, SUPER_LIKE)
+      tags:
+        - Interactions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetId:
+                  type: string
+                action:
+                  type: string
+                  enum: [LIKE, PASS, SUPER_LIKE]
+      responses:
+        '200':
+          description: Swipe processed (asynchronously queued)
+  /api/interactions/history:
+    get:
+      summary: Get interaction history
+      tags:
+        - Interactions
+      responses:
+        '200':
+          description: Interaction history retrieved
+  /api/interactions/stats:
+    get:
+      summary: Get interaction stats
+      tags:
+        - Interactions
+      responses:
+        '200':
+          description: Stats retrieved
+  /api/interactions/matches:
+    get:
+      summary: Get all successful mutual matches
+      tags:
+        - Interactions
+      responses:
+        '200':
+          description: Mutual matches retrieved
+  /api/interactions/matches/{id}:
+    delete:
+      summary: Unmatch a user
+      tags:
+        - Interactions
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Match deleted
+  /api/conversations:
+    get:
+      summary: Get user conversations
+      tags:
+        - Real-Time Chat
+      responses:
+        '200':
+          description: Conversations retrieved
+  /api/conversations/{id}:
+    get:
+      summary: Get single conversation
+      tags:
+        - Real-Time Chat
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conversation retrieved
+  /api/messages:
+    post:
+      summary: Send a message
+      tags:
+        - Real-Time Chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversationId:
+                  type: string
+                content:
+                  type: string
+                type:
+                  type: string
+      responses:
+        '200':
+          description: Message queued for delivery
+  /api/messages/{conversationId}:
+    get:
+      summary: Get conversation messages
+      tags:
+        - Real-Time Chat
+      parameters:
+        - in: path
+          name: conversationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Messages retrieved
+  /api/messages/read:
+    patch:
+      summary: Mark messages as read
+      tags:
+        - Real-Time Chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                messageIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Messages marked read
+  /api/swipe:
+    post:
+      summary: Swipe on a user
+      tags:
+        - Swipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetId:
+                  type: string
+                rating:
+                  type: string
+                  enum: [like, nope]
+      responses:
+        '200':
+          description: Swipe recorded
+  /api/swipe/matches:
+    get:
+      summary: Get matches
+      tags:
+        - Swipe
+      responses:
+        '200':
+          description: List of matches
+  /api/swipe/matches/{matchId}/messages:
+    get:
+      summary: Get messages for a match
+      tags:
+        - Swipe
+      parameters:
+        - in: path
+          name: matchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of messages
+  /api/swipe/matches/{matchId}/read:
+    post:
+      summary: Mark messages as read
+      tags:
+        - Swipe
+      parameters:
+        - in: path
+          name: matchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Messages marked as read
+  /api/block:
+    get:
+      summary: Get blocked users
+      tags:
+        - Block
+      responses:
+        '200':
+          description: Blocked users list
+    post:
+      summary: Block a user
+      tags:
+        - Block
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blockedId:
+                  type: string
+      responses:
+        '200':
+          description: User blocked
+  /api/block/{blockedId}:
+    delete:
+      summary: Unblock a user
+      tags:
+        - Block
+      parameters:
+        - in: path
+          name: blockedId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User unblocked

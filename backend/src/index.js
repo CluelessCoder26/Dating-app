@@ -1,71 +1,115 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import prisma from './db.js';
-import redisClient from './redis.js';
+import { createServer } from 'http';
+import app from './app.js';
+import { env } from './config/env.js';
+import logger from './utils/logger.js';
+import prisma from './config/prisma.js';
+import redisManager from './config/redis.js';
+import { socketManager } from './sockets/SocketManager.js';
+import { workerManager } from './workers/WorkerManager.js';
+import { StorageService } from './services/StorageService.js';
+import { setupPhotoWorker } from './workers/photoWorker.js';
+import { setupDiscoveryWorkers } from './workers/discoveryWorker.js';
+import { setupInteractionWorkers } from './workers/interactionWorker.js';
+import { setupRealtimeWorkers } from './workers/realtimeWorker.js';
 
-// Route imports
-import authRoutes from './routes/auth.js';
-import profileRoutes from './routes/profile.js';
-import swipeRoutes from './routes/swipe.js';
-import photoRoutes from './routes/photo.js';
-import blockRoutes from './routes/block.js';
-
-dotenv.config();
-
-const app = express();
-const PORT = process.env.BACKEND_PORT || 5000;
-
-// Enable CORS and JSON parsing
-app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
-// Serve static uploads
-app.use('/uploads', express.static('uploads'));
-
-// Health check endpoint
-app.get('/health', async (req, res) => {
-  let dbStatus = 'disconnected';
-  let redisStatus = 'disconnected';
-
+const startServer = async () => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
-    dbStatus = 'connected';
-  } catch (err) {
-    console.error('Healthcheck: Database connection failed:', err.message);
-  }
+    // 1. Initialize Storage Directory
+    await StorageService.init();
 
-  try {
-    if (redisClient.isOpen) {
-      const redisCheck = await redisClient.ping();
-      redisStatus = redisCheck === 'PONG' ? 'connected' : 'disconnected';
+    if (env.USE_REDIS !== 'false') {
+      setupPhotoWorker();
+      setupDiscoveryWorkers();
+      setupInteractionWorkers();
+      setupRealtimeWorkers();
     }
-  } catch (err) {
-    console.error('Healthcheck: Redis connection failed:', err.message);
+
+    // 2. Connect to Redis (Graceful if fails)
+    await redisManager.connect();
+
+    // 3. Verify Database Connection
+    await prisma.$connect();
+    logger.info('Database connection established successfully.');
+
+    // 4. Create HTTP Server for Express
+    const httpServer = createServer(app);
+
+    // 5. Create Separate HTTP Server for WebSockets (Port 5001)
+    const socketHttpServer = createServer();
+    await socketManager.init(socketHttpServer);
+
+    // 6. Start listening
+    httpServer.listen(env.BACKEND_PORT, () => {
+      logger.info(`Primary Express API Server running in ${env.NODE_ENV} mode on port ${env.BACKEND_PORT}`);
+    });
+
+    socketHttpServer.listen(env.WEBSOCKET_PORT, () => {
+      logger.info(`WebSockets Server running on port ${env.WEBSOCKET_PORT}`);
+    });
+
+    // Health Check Endpoint (Added to Express explicitly here or in app.js)
+    app.get('/health', async (req, res) => {
+      let dbStatus = 'disconnected';
+      try {
+        await prisma.$queryRaw`SELECT 1`;
+        dbStatus = 'connected';
+      } catch (err) {
+        logger.error(`Healthcheck DB Error: ${err.message}`);
+      }
+
+      const redisStatus = redisManager.isHealthy() ? 'connected' : 'disconnected';
+
+      const isHealthy = dbStatus === 'connected';
+      res.status(isHealthy ? 200 : 503).json({
+        status: isHealthy ? 'healthy' : 'unhealthy',
+        database: dbStatus,
+        redis: redisStatus,
+        timestamp: new Date().toISOString()
+      });
+    });
+
+    // Graceful Shutdown
+    const shutdown = async (signal) => {
+      logger.info(`Received ${signal}. Shutting down gracefully...`);
+      
+      await workerManager.shutdown();
+      
+      socketHttpServer.close(() => {
+        logger.info('WebSocket server closed.');
+      });
+
+      httpServer.close(async () => {
+        logger.info('HTTP server closed.');
+        await redisManager.disconnect();
+        await prisma.$disconnect();
+        process.exit(0);
+      });
+
+      // Force shutdown after 10 seconds
+      setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+      }, 10000);
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
+  } catch (error) {
+    logger.error(`Failed to start server: ${error.message}`, error);
+    process.exit(1);
   }
+};
 
-  const isHealthy = dbStatus === 'connected';
-  res.status(isHealthy ? 200 : 500).json({
-    status: isHealthy ? 'healthy' : 'unhealthy',
-    database: dbStatus,
-    redis: redisStatus
-  });
+startServer();
+
+// Handle unhandled rejections and uncaught exceptions globally
+process.on('unhandledRejection', (err) => {
+  logger.error(`Unhandled Rejection: ${err.message}`);
+  // Do not exit in production unless critical, but standard practice is to exit and let process manager restart
 });
 
-// Register routes
-app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes);
-app.use('/api/swipe', swipeRoutes);
-app.use('/api/photos', photoRoutes);
-app.use('/api/block', blockRoutes);
-
-// Global Error Handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal Server Error', details: err.message });
-});
-
-app.listen(PORT, () => {
-  console.log(`Primary Express API Server running on port ${PORT}`);
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught Exception: ${err.message}`);
+  process.exit(1);
 });

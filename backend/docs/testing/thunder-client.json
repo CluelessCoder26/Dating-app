@@ -1,0 +1,44 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "Spark API Phase 2",
+  "dateExported": "2026-07-01T00:00:00.000Z",
+  "version": "1.1",
+  "folders": [],
+  "requests": [
+    {
+      "containerId": "",
+      "sortNum": 10000,
+      "headers": [],
+      "colId": "col-12345",
+      "name": "Health Check",
+      "url": "http://localhost:5000/health",
+      "method": "GET"
+    },
+    {
+      "containerId": "",
+      "sortNum": 20000,
+      "headers": [],
+      "colId": "col-12345",
+      "name": "Register",
+      "url": "http://localhost:5000/api/auth/register",
+      "method": "POST",
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"phone\": \"+1234567890\",\n  \"email\": \"test@example.com\",\n  \"password\": \"Password!123\"\n}"
+      }
+    },
+    {
+      "containerId": "",
+      "sortNum": 30000,
+      "headers": [],
+      "colId": "col-12345",
+      "name": "Login",
+      "url": "http://localhost:5000/api/auth/login",
+      "method": "POST",
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"identifier\": \"test@example.com\",\n  \"password\": \"Password!123\"\n}"
+      }
+    }
+  ]
+}
