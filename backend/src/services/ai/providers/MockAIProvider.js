@@ -30,4 +30,18 @@ export class MockAIProvider extends AIProvider {
 
     return result;
   }
+
+  async analyzeText(text) {
+    const start = Date.now();
+    await new Promise(res => setTimeout(res, 50));
+
+    // Simulate AI check. If it contains "bad", flag it.
+    const isBad = text.toLowerCase().includes('bad');
+    
+    return {
+      confidence: isBad ? 0.99 : 0.1,
+      flags: isBad ? ['HATE_SPEECH'] : [],
+      executionTimeMs: Date.now() - start
+    };
+  }
 }

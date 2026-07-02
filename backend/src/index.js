@@ -11,6 +11,9 @@ import { setupPhotoWorker } from './workers/photoWorker.js';
 import { setupDiscoveryWorkers } from './workers/discoveryWorker.js';
 import { setupInteractionWorkers } from './workers/interactionWorker.js';
 import { setupRealtimeWorkers } from './workers/realtimeWorker.js';
+import { setupTrustWorkers } from './workers/trustWorker.js';
+import { setupGrowthWorkers } from './workers/growthWorker.js';
+import { setupAIOSWorkers } from './workers/aiosWorker.js';
 
 const startServer = async () => {
   try {
@@ -22,6 +25,9 @@ const startServer = async () => {
       setupDiscoveryWorkers();
       setupInteractionWorkers();
       setupRealtimeWorkers();
+      setupTrustWorkers();
+      setupGrowthWorkers();
+      setupAIOSWorkers();
     }
 
     // 2. Connect to Redis (Graceful if fails)

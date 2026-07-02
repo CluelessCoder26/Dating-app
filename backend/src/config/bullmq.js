@@ -72,3 +72,27 @@ export const messagePersistenceQueue = queueManager.getQueue('messagePersistence
 export const deliveryQueue = queueManager.getQueue('deliveryQueue');
 export const notificationQueue = queueManager.getQueue('notificationQueue');
 export const cleanupQueue = queueManager.getQueue('cleanupQueue');
+
+// Phase 8: Trust & Safety Engine
+export const moderationQueue = queueManager.getQueue('moderationQueue');
+export const riskQueue = queueManager.getQueue('riskQueue');
+export const appealQueue = queueManager.getQueue('appealQueue');
+export const reputationQueue = queueManager.getQueue('reputationQueue');
+
+// Phase 9: Growth & Monetization Engine
+export const subscriptionQueue = queueManager.getQueue('subscriptionQueue');
+export const billingQueue = queueManager.getQueue('billingQueue');
+export const rewardQueue = queueManager.getQueue('rewardQueue');
+export const referralQueue = queueManager.getQueue('referralQueue');
+export const experimentQueue = queueManager.getQueue('experimentQueue');
+export const promotionQueue = queueManager.getQueue('promotionQueue');
+
+// Phase 10: AIOS Engine
+export const compatibilityQueue = queueManager.getQueue('compatibilityQueue');
+export const embeddingQueue = queueManager.getQueue('embeddingQueue');
+export const summaryQueue = queueManager.getQueue('summaryQueue');
+export const suggestionQueue = queueManager.getQueue('suggestionQueue');
+export const aiNotificationQueue = queueManager.getQueue('aiNotificationQueue');
+export const aiRecommendationQueue = queueManager.getQueue('aiRecommendationQueue');
+export const aiModerationQueue = queueManager.getQueue('aiModerationQueue');
+

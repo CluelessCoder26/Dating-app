@@ -775,6 +775,261 @@ paths:
       responses:
         '200':
           description: Messages marked read
+  /api/trust/report:
+    post:
+      summary: Report an entity
+      tags:
+        - Trust & Safety
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reportedId:
+                  type: string
+                targetType:
+                  type: string
+                reasonCategory:
+                  type: string
+      responses:
+        '201':
+          description: Report created successfully
+  /api/trust/block:
+    post:
+      summary: Block a user
+      tags:
+        - Trust & Safety
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                blockedId:
+                  type: string
+      responses:
+        '200':
+          description: User blocked successfully
+  /api/trust/reputation:
+    get:
+      summary: Get user reputation
+      tags:
+        - Trust & Safety
+      responses:
+        '200':
+          description: Reputation retrieved
+  /api/trust/risk:
+    get:
+      summary: Get user risk assessment
+      tags:
+        - Trust & Safety
+      responses:
+        '200':
+          description: Risk retrieved
+  /api/moderation/cases:
+    get:
+      summary: Get moderation cases (Admin/Mod)
+      tags:
+        - Moderation
+      responses:
+        '200':
+          description: Cases retrieved
+  /api/moderation/cases/{id}:
+    patch:
+      summary: Resolve moderation case
+      tags:
+        - Moderation
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Case resolved
+  /api/growth/plans:
+    get:
+      summary: Get available subscription plans
+      tags:
+        - Growth & Monetization
+      responses:
+        '200':
+          description: Plans retrieved successfully
+  /api/growth/subscriptions:
+    post:
+      summary: Create a subscription
+      tags:
+        - Growth & Monetization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planId:
+                  type: string
+      responses:
+        '201':
+          description: Subscription created
+    get:
+      summary: Get user subscriptions
+      tags:
+        - Growth & Monetization
+      responses:
+        '200':
+          description: Subscriptions retrieved
+  /api/growth/entitlements:
+    get:
+      summary: Get user entitlements (features)
+      tags:
+        - Growth & Monetization
+      responses:
+        '200':
+          description: Entitlements retrieved
+  /api/growth/promotions/apply:
+    post:
+      summary: Apply a promo code
+      tags:
+        - Growth & Monetization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Promotion applied
+  /api/growth/rewards:
+    get:
+      summary: Get user rewards
+      tags:
+        - Growth & Monetization
+      responses:
+        '200':
+          description: Rewards retrieved
+  /api/ai/profile/review:
+    post:
+      summary: AI profile review
+      tags:
+        - AIOS
+      responses:
+        '200':
+          description: Profile review with score and suggestions
+  /api/ai/profile/improve:
+    post:
+      summary: AI bio improvement
+      tags:
+        - AIOS
+      responses:
+        '200':
+          description: Improved bio text
+  /api/ai/compatibility/{matchId}:
+    get:
+      summary: Get AI compatibility score for a match
+      tags:
+        - AIOS
+      parameters:
+        - in: path
+          name: matchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Compatibility profile
+  /api/ai/icebreaker:
+    post:
+      summary: Generate AI icebreaker message
+      tags:
+        - AIOS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetUserId:
+                  type: string
+      responses:
+        '200':
+          description: Icebreaker message
+  /api/ai/reply:
+    post:
+      summary: Generate AI reply suggestion
+      tags:
+        - AIOS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversationContext:
+                  type: string
+                lastMessage:
+                  type: string
+      responses:
+        '200':
+          description: Reply suggestion
+  /api/ai/conversation/summary:
+    post:
+      summary: Generate AI conversation summary
+      tags:
+        - AIOS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                conversationId:
+                  type: string
+      responses:
+        '200':
+          description: Conversation summary
+  /api/ai/relationship/memory/{matchId}:
+    get:
+      summary: Get relationship memory for a match
+      tags:
+        - AIOS
+      parameters:
+        - in: path
+          name: matchId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Relationship memory
+  /api/ai/analytics:
+    get:
+      summary: Get user AI usage analytics
+      tags:
+        - AIOS
+      responses:
+        '200':
+          description: AI usage data
   /api/swipe:
     post:
       summary: Swipe on a user
@@ -869,3 +1124,55 @@ paths:
       responses:
         '200':
           description: User unblocked
+  /api/ops/dashboard:
+    get:
+      summary: Get ops dashboard
+      tags:
+        - Ops
+      responses:
+        '200':
+          description: OK
+  /api/ops/system:
+    get:
+      summary: Get system health
+      tags:
+        - Ops
+      responses:
+        '200':
+          description: OK
+  /api/ops/ai:
+    get:
+      summary: Get AI usage
+      tags:
+        - Ops
+      responses:
+        '200':
+          description: OK
+  /api/ops/incidents:
+    get:
+      summary: Get incidents
+      tags:
+        - Ops
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Create incident
+      tags:
+        - Ops
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                severity:
+                  type: string
+      responses:
+        '201':
+          description: Created

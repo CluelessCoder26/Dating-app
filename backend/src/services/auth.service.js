@@ -6,45 +6,55 @@ import { jwtService } from './jwt.service.js';
 
 class AuthService {
   async registerUser({ phone, email, password }, ipAddress) {
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        OR: [{ phone }, { email }]
-      }
-    });
-
-    if (existingUser) {
-      if (existingUser.emailVerified) {
-        throw new ConflictError('User with this phone or email already exists and is verified');
-      }
-    }
-
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
-
-    let user;
-    if (existingUser) {
-      user = await prisma.user.update({
-        where: { id: existingUser.id },
-        data: { phone, email, passwordHash, emailVerified: false }
-      });
-    } else {
-      user = await prisma.user.create({
-        data: { phone, email, passwordHash, emailVerified: false, role: 'user', status: 'active' }
-      });
-    }
-
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-    await prisma.otp.upsert({
-      where: { email_type: { email, type: 'verification' } },
-      update: { code: otpCode, expiresAt },
-      create: { email, code: otpCode, type: 'verification', expiresAt }
+    // 1. Database operations inside transaction
+    const user = await prisma.$transaction(async (tx) => {
+      const existingUser = await tx.user.findFirst({
+        where: { OR: [{ phone }, { email }] }
+      });
+
+      if (existingUser && existingUser.emailVerified) {
+        throw new ConflictError('User with this phone or email already exists and is verified');
+      }
+
+      let txUser;
+      if (existingUser) {
+        txUser = await tx.user.update({
+          where: { id: existingUser.id },
+          data: { phone, email, passwordHash, emailVerified: false }
+        });
+      } else {
+        txUser = await tx.user.create({
+          data: { phone, email, passwordHash, emailVerified: false, role: 'user', status: 'active' }
+        });
+      }
+
+      await tx.otp.upsert({
+        where: { email_type: { email, type: 'verification' } },
+        update: { code: otpCode, expiresAt },
+        create: { email, code: otpCode, type: 'verification', expiresAt }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          userId: txUser.id,
+          action: 'register',
+          ipAddress: ipAddress || 'unknown',
+          details: 'User registered successfully'
+        }
+      });
+
+      return txUser;
     });
 
-    await emailService.sendOtpEmail(email, otpCode, 'verification');
-
-    await this.logAudit(user.id, 'register', ipAddress, 'User registered successfully');
+    // 2. External side-effects outside transaction
+    await emailService.sendOtpEmail(email, otpCode, 'verification').catch(e => {
+      console.error('Failed to send OTP email:', e);
+    });
 
     return user;
   }

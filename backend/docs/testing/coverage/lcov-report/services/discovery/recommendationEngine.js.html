@@ -23,9 +23,9 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">20% </span>
+                <span class="strong">90% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>2/10</span>
+                <span class='fraction'>9/10</span>
             </div>
         
             
@@ -37,16 +37,16 @@
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">25% </span>
+                <span class="strong">75% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>1/4</span>
+                <span class='fraction'>3/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">22.22% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>2/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -109,38 +109,38 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { candidateGenerator } from './candidateGenerator.js';
 import { RankingEngine } from './rankingEngine.js';
 import { recommendationConfig } from '../../config/recommendation.js';
@@ -151,20 +151,20 @@ class RecommendationEngine {
     this.rankingEngine = new RankingEngine(recommendationConfig.weights);
   }
 &nbsp;
-<span class="fstat-no" title="function not covered" >  as</span>ync getRecommendations(currentUser, preferences, limit = <span class="branch-0 cbranch-no" title="branch not covered" >20)</span> {
+  async getRecommendations(currentUser, preferences, limit = <span class="branch-0 cbranch-no" title="branch not covered" >20)</span> {
     // 1. Generate Candidates (PostgreSQL filters)
     // We pull slightly more than requested to allow ranking to surface the best
-    const rawCandidates = <span class="cstat-no" title="statement not covered" >await candidateGenerator.generateCandidates(currentUser, preferences, limit * 2);</span>
+    const rawCandidates = await candidateGenerator.generateCandidates(currentUser, preferences, limit * 2);
 &nbsp;
     // 2. Score Candidates
-    const scoredCandidates = <span class="cstat-no" title="statement not covered" >rawCandidates.map(<span class="fstat-no" title="function not covered" >ca</span>ndidate =&gt; {</span>
-      const recommendationScore = <span class="cstat-no" title="statement not covered" >this.rankingEngine.scoreCandidate(candidate, currentUser, preferences);</span>
-      const distance = <span class="cstat-no" title="statement not covered" >calculateDistanceMiles(</span>
+    const scoredCandidates = rawCandidates.map(candidate =&gt; {
+      const recommendationScore = this.rankingEngine.scoreCandidate(candidate, currentUser, preferences);
+      const distance = calculateDistanceMiles(
         currentUser.latitude, currentUser.longitude,
         candidate.latitude, candidate.longitude
       );
       
-<span class="cstat-no" title="statement not covered" >      return {</span>
+      return {
         ...candidate,
         distanceMiles: parseFloat(distance.toFixed(2)),
         recommendationScore: parseFloat(recommendationScore.toFixed(2))
@@ -172,10 +172,10 @@ class RecommendationEngine {
     });
 &nbsp;
     // 3. Rank Candidates (Sort descending by score)
-<span class="cstat-no" title="statement not covered" >    scoredCandidates.sort(<span class="fstat-no" title="function not covered" >(a</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >b.recommendationScore - a.recommendationScore)</span>;</span>
+    scoredCandidates.sort(<span class="fstat-no" title="function not covered" >(a</span>, b) =&gt; <span class="cstat-no" title="statement not covered" >b.recommendationScore - a.recommendationScore)</span>;
 &nbsp;
     // 4. Truncate to limit
-<span class="cstat-no" title="statement not covered" >    return scoredCandidates.slice(0, limit);</span>
+    return scoredCandidates.slice(0, limit);
   }
 }
 &nbsp;
@@ -187,7 +187,7 @@ export const recommendationEngine = new RecommendationEngine();
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-07-01T11:04:13.697Z
+                at 2026-07-02T12:35:58.256Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

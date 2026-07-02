@@ -180,7 +180,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">7x</span>
+<span class="cline-any cline-yes">13x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import redisManager from '../../config/redis.js';
 import logger from '../../utils/logger.js';
 &nbsp;
@@ -189,13 +189,13 @@ class PresenceEngine {
    * Mark user as online
    */
 <span class="fstat-no" title="function not covered" >  as</span>ync setOnline(userId, socketId) {
-<span class="cstat-no" title="statement not covered" >    if (!redisManager.client) <span class="cstat-no" title="statement not covered" >return;</span></span>
+<span class="cstat-no" title="statement not covered" >    if (!redisManager) <span class="cstat-no" title="statement not covered" >return;</span></span>
     
     // Store mapping of user -&gt; multiple sockets
-<span class="cstat-no" title="statement not covered" >    await redisManager.client.sadd(`presence:${userId}:sockets`, socketId);</span>
+<span class="cstat-no" title="statement not covered" >    await redisManager.addToSet(`presence:${userId}:sockets`, socketId);</span>
     
     // Set global online status
-<span class="cstat-no" title="statement not covered" >    await redisManager.client.hset(`presence:${userId}`, {</span>
+<span class="cstat-no" title="statement not covered" >    await redisManager.hashSet(`presence:${userId}`, {</span>
       status: 'online',
       lastSeen: new Date().toISOString()
     });
@@ -207,13 +207,13 @@ class PresenceEngine {
    * Mark specific socket as offline. If no sockets left, user is offline.
    */
 <span class="fstat-no" title="function not covered" >  as</span>ync setOffline(userId, socketId) {
-<span class="cstat-no" title="statement not covered" >    if (!redisManager.client) <span class="cstat-no" title="statement not covered" >return;</span></span>
+<span class="cstat-no" title="statement not covered" >    if (!redisManager) <span class="cstat-no" title="statement not covered" >return;</span></span>
 &nbsp;
-<span class="cstat-no" title="statement not covered" >    await redisManager.client.srem(`presence:${userId}:sockets`, socketId);</span>
-    const activeSockets = <span class="cstat-no" title="statement not covered" >await redisManager.client.scard(`presence:${userId}:sockets`);</span>
+<span class="cstat-no" title="statement not covered" >    await redisManager.removeFromSet(`presence:${userId}:sockets`, socketId);</span>
+    const activeSockets = <span class="cstat-no" title="statement not covered" >await redisManager.scard(`presence:${userId}:sockets`);</span>
 &nbsp;
 <span class="cstat-no" title="statement not covered" >    if (activeSockets === 0) {</span>
-<span class="cstat-no" title="statement not covered" >      await redisManager.client.hset(`presence:${userId}`, {</span>
+<span class="cstat-no" title="statement not covered" >      await redisManager.hashSet(`presence:${userId}`, {</span>
         status: 'offline',
         lastSeen: new Date().toISOString()
       });
@@ -225,8 +225,8 @@ class PresenceEngine {
    * Get user presence
    */
 <span class="fstat-no" title="function not covered" >  as</span>ync getPresence(userId) {
-<span class="cstat-no" title="statement not covered" >    if (!redisManager.client) <span class="cstat-no" title="statement not covered" >return { status: 'unknown' };</span></span>
-    const data = <span class="cstat-no" title="statement not covered" >await redisManager.client.hgetall(`presence:${userId}`);</span>
+<span class="cstat-no" title="statement not covered" >    if (!redisManager) <span class="cstat-no" title="statement not covered" >return { status: 'unknown' };</span></span>
+    const data = <span class="cstat-no" title="statement not covered" >await redisManager.hashGetAll(`presence:${userId}`);</span>
 <span class="cstat-no" title="statement not covered" >    return data &amp;&amp; data.status ? data : { status: 'offline' };</span>
   }
 &nbsp;
@@ -234,8 +234,8 @@ class PresenceEngine {
    * Get all active sockets for a user
    */
 <span class="fstat-no" title="function not covered" >  as</span>ync getUserSockets(userId) {
-<span class="cstat-no" title="statement not covered" >    if (!redisManager.client) <span class="cstat-no" title="statement not covered" >return [];</span></span>
-<span class="cstat-no" title="statement not covered" >    return await redisManager.client.smembers(`presence:${userId}:sockets`);</span>
+<span class="cstat-no" title="statement not covered" >    if (!redisManager) <span class="cstat-no" title="statement not covered" >return [];</span></span>
+<span class="cstat-no" title="statement not covered" >    return await redisManager.getMembers(`presence:${userId}:sockets`);</span>
   }
 }
 &nbsp;
@@ -247,7 +247,7 @@ export const presenceEngine = new PresenceEngine();
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-07-01T11:04:13.697Z
+                at 2026-07-02T12:35:58.256Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

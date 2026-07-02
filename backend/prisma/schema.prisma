@@ -327,3 +327,483 @@ model Block {
   @@unique([blockerId, blockedId])
   @@index([blockerId])
 }
+
+model Mute {
+  id        String   @id @default(uuid())
+  muterId   String
+  mutedId   String
+  createdAt DateTime @default(now())
+
+  @@unique([muterId, mutedId])
+  @@index([muterId])
+}
+
+model Report {
+  id            String   @id @default(uuid())
+  reporterId    String
+  reportedId    String
+  targetType    String   // "USER", "MESSAGE", "PROFILE", "PHOTO", "CONVERSATION", "MATCH"
+  targetId      String?
+  reasonCategory String  // e.g. "SPAM", "HARASSMENT", "INAPPROPRIATE"
+  customReason  String?
+  status        String   @default("PENDING") // PENDING, REVIEWING, RESOLVED, DISMISSED
+  evidenceUrls  String[]
+  caseId        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([reportedId])
+  @@index([reporterId])
+  @@index([status])
+}
+
+model Appeal {
+  id            String   @id @default(uuid())
+  userId        String
+  restrictionId String
+  reason        String
+  evidenceUrls  String[]
+  status        String   @default("PENDING") // PENDING, REVIEWING, APPROVED, REJECTED
+  moderatorId   String?
+  moderatorNote String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model ModerationCase {
+  id          String   @id @default(uuid())
+  userId      String
+  trigger     String   // "USER_REPORT", "AI_FLAG", "RISK_SCORE"
+  status      String   @default("OPEN") // OPEN, IN_PROGRESS, CLOSED
+  severity    String   // "LOW", "MEDIUM", "HIGH", "CRITICAL"
+  resolution  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+model RiskAssessment {
+  id                    String   @id @default(uuid())
+  userId                String   @unique
+  spamRisk              Float    @default(0.0)
+  fraudRisk             Float    @default(0.0)
+  scamRisk              Float    @default(0.0)
+  botProbability        Float    @default(0.0)
+  fakeProfileProbability Float    @default(0.0)
+  messageAbuseScore     Float    @default(0.0)
+  overallRiskScore      Float    @default(0.0)
+  aiConfidence          Float?
+  lastEvaluatedAt       DateTime @default(now())
+
+  @@index([overallRiskScore])
+}
+
+model Reputation {
+  id                     String   @id @default(uuid())
+  userId                 String   @unique
+  trustScore             Int      @default(100) // 0-100
+  safetyScore            Int      @default(100)
+  reportCount            Int      @default(0)
+  verifiedSignals        Int      @default(0)
+  positiveBehaviourScore Int      @default(0)
+  negativeBehaviourScore Int      @default(0)
+  updatedAt              DateTime @updatedAt
+}
+
+model Restriction {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // "WARNING", "SHADOW_BAN", "TEMPORARY_SUSPENSION", "PERMANENT_BAN"
+  reason      String
+  active      Boolean  @default(true)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([active])
+}
+
+model AuditEvent {
+  id           String   @id @default(uuid())
+  actorId      String?  // SYSTEM or Moderator ID
+  targetId     String   // The affected user/entity
+  action       String   // "RESTRICTION_APPLIED", "CASE_RESOLVED"
+  prevState    String?  // JSON string
+  newState     String?  // JSON string
+  reason       String?
+  aiConfidence Float?
+  createdAt    DateTime @default(now())
+
+  @@index([targetId])
+  @@index([action])
+}
+
+model ModeratorAction {
+  id          String   @id @default(uuid())
+  moderatorId String
+  caseId      String?
+  action      String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  @@index([moderatorId])
+  @@index([caseId])
+}
+
+model Plan {
+  id            String         @id @default(uuid())
+  name          String
+  level         Int            @default(0) // 0=Free, 1=Premium, 2=Gold, etc.
+  price         Float
+  currency      String         @default("USD")
+  interval      String         @default("month") // month, year
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                     String        @id @default(uuid())
+  userId                 String
+  planId                 String
+  plan                   Plan          @relation(fields: [planId], references: [id])
+  status                 String        @default("active") // active, trialing, past_due, canceled, unpaid
+  provider               String        @default("mock") // stripe, apple, google
+  providerSubscriptionId String?
+  currentPeriodStart     DateTime      @default(now())
+  currentPeriodEnd       DateTime
+  cancelAtPeriodEnd      Boolean       @default(false)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  entitlements           Entitlement[]
+  purchases              Purchase[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Feature {
+  id           String        @id @default(uuid())
+  name         String
+  key          String        @unique // e.g. "unlimited_swipes", "super_likes"
+  description  String?
+  entitlements Entitlement[]
+}
+
+model Entitlement {
+  id             String       @id @default(uuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  featureId      String
+  feature        Feature      @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  active         Boolean      @default(true)
+  expiresAt      DateTime?
+  
+  @@unique([subscriptionId, featureId])
+}
+
+model FeatureFlag {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  enabled     Boolean  @default(false)
+  rules       String?  // JSON containing percentage rollouts, user targeting
+  environment String   @default("production")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Experiment {
+  id        String              @id @default(uuid())
+  key       String              @unique
+  name      String
+  status    String              @default("DRAFT") // DRAFT, RUNNING, COMPLETED
+  variants  ExperimentVariant[]
+  createdAt DateTime            @default(now())
+}
+
+model ExperimentVariant {
+  id           String     @id @default(uuid())
+  experimentId String
+  experiment   Experiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  key          String
+  weight       Int        @default(1) // Relative weight for traffic allocation
+}
+
+model Promotion {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  discountType  String    // "PERCENTAGE", "FIXED", "TRIAL"
+  discountValue Float
+  maxUses       Int?
+  uses          Int       @default(0)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  coupons       Coupon[]
+}
+
+model Coupon {
+  id          String    @id @default(uuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  userId      String
+  redeemedAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Referral {
+  id            String   @id @default(uuid())
+  referrerId    String
+  refereeId     String   @unique
+  status        String   @default("PENDING") // PENDING, COMPLETED, FRAUD
+  rewardGranted Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  @@index([referrerId])
+}
+
+model Reward {
+  id          String   @id @default(uuid())
+  userId      String
+  type        String   // "COINS", "BOOST", "SUPER_LIKE", "PREMIUM_DAYS"
+  amount      Int      @default(1)
+  status      String   @default("GRANTED") // GRANTED, REDEEMED, EXPIRED
+  createdAt   DateTime @default(now())
+  redeemedAt  DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Achievement {
+  id          String                @id @default(uuid())
+  key         String                @unique
+  name        String
+  description String
+  criteria    String                // JSON rules
+  progresses  AchievementProgress[]
+}
+
+model AchievementProgress {
+  id            String      @id @default(uuid())
+  userId        String
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  progress      Int         @default(0)
+  completedAt   DateTime?
+  
+  @@unique([userId, achievementId])
+}
+
+model Purchase {
+  id                    String        @id @default(uuid())
+  userId                String
+  subscriptionId        String?
+  subscription          Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  amount                Float
+  currency              String        @default("USD")
+  status                String        @default("PENDING") // PENDING, SUCCESS, FAILED, REFUNDED
+  providerTransactionId String?       @unique
+  createdAt             DateTime      @default(now())
+  invoices              Invoice[]
+
+  @@index([userId])
+}
+
+model Invoice {
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  url        String?
+  createdAt  DateTime @default(now())
+}
+
+model BillingEvent {
+  id              String   @id @default(uuid())
+  type            String   // "PAYMENT_SUCCESS", "SUBSCRIPTION_CANCELED", "CHARGEBACK"
+  providerEventId String?  @unique
+  payload         String?  // Raw webhook payload
+  processedAt     DateTime @default(now())
+}
+
+model PromptTemplate {
+  id          String          @id @default(uuid())
+  key         String          @unique
+  name        String
+  category    String
+  template    String
+  metadata    String?
+  versions    PromptVersion[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model PromptVersion {
+  id         String         @id @default(uuid())
+  templateId String
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version    Int
+  content    String
+  active     Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+}
+
+model AIRequest {
+  id            String      @id @default(uuid())
+  userId        String?
+  provider      String
+  model         String
+  category      String
+  promptTokens  Int         @default(0)
+  responseTokens Int        @default(0)
+  costUsd       Float       @default(0.0)
+  latencyMs     Int         @default(0)
+  status        String      @default("SUCCESS")
+  response      AIResponse?
+  createdAt     DateTime    @default(now())
+
+  @@index([userId])
+  @@index([provider])
+  @@index([category])
+}
+
+model AIResponse {
+  id          String    @id @default(uuid())
+  requestId   String    @unique
+  request     AIRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  content     String
+  metadata    String?
+  createdAt   DateTime  @default(now())
+}
+
+model Embedding {
+  id          String   @id @default(uuid())
+  entityType  String
+  entityId    String
+  vector      String
+  model       String   @default("mock-embed-v1")
+  dimensions  Int      @default(384)
+  createdAt   DateTime @default(now())
+
+  @@unique([entityType, entityId])
+  @@index([entityType])
+}
+
+model CompatibilityProfile {
+  id                      String   @id @default(uuid())
+  user1Id                 String
+  user2Id                 String
+  overallScore            Int
+  interestScore           Int?
+  lifestyleScore          Int?
+  conversationScore       Int?
+  relationshipGoalScore   Int?
+  explanation             String?
+  suggestions             String?
+  generatedAt             DateTime @default(now())
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model RelationshipMemory {
+  id              String   @id @default(uuid())
+  matchId         String   @unique
+  user1Id         String
+  user2Id         String
+  sharedTopics    String[]
+  sharedInterests String[]
+  importantEvents String?
+  highlights      String?
+  summary         String?
+  suggestions     String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+model ConversationSummary {
+  id              String   @id @default(uuid())
+  conversationId  String   @unique
+  summary         String
+  topics          String[]
+  tone            String?
+  momentum        String?
+  messageCount    Int      @default(0)
+  generatedAt     DateTime @default(now())
+}
+
+model AIUsage {
+  id            String   @id @default(uuid())
+  userId        String?
+  provider      String
+  model         String
+  category      String
+  tokens        Int      @default(0)
+  costUsd       Float    @default(0.0)
+  period        String
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([provider])
+  @@index([period])
+}
+
+model AIAudit {
+  id            String   @id @default(uuid())
+  requestId     String?
+  userId        String?
+  action        String
+  details       String?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+}
+
+model OpsAudit {
+  id          String   @id @default(uuid())
+  adminId     String
+  action      String
+  entityType  String
+  entityId    String?
+  oldValue    String?
+  newValue    String?
+  reason      String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminId])
+  @@index([action])
+  @@index([entityType])
+}
+
+model Incident {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  status      String   @default("OPEN") // OPEN, INVESTIGATING, RESOLVED
+  severity    String   // LOW, MEDIUM, HIGH, CRITICAL
+  ownerId     String?
+  rca         String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OpsMetric {
+  id          String   @id @default(uuid())
+  category    String
+  name        String
+  value       Float
+  tags        String?
+  recordedAt  DateTime @default(now())
+
+  @@index([category, name, recordedAt])
+}

@@ -6,13 +6,13 @@ class PresenceEngine {
    * Mark user as online
    */
   async setOnline(userId, socketId) {
-    if (!redisManager.client) return;
+    if (!redisManager) return;
     
     // Store mapping of user -> multiple sockets
-    await redisManager.client.sadd(`presence:${userId}:sockets`, socketId);
+    await redisManager.addToSet(`presence:${userId}:sockets`, socketId);
     
     // Set global online status
-    await redisManager.client.hset(`presence:${userId}`, {
+    await redisManager.hashSet(`presence:${userId}`, {
       status: 'online',
       lastSeen: new Date().toISOString()
     });
@@ -24,13 +24,13 @@ class PresenceEngine {
    * Mark specific socket as offline. If no sockets left, user is offline.
    */
   async setOffline(userId, socketId) {
-    if (!redisManager.client) return;
+    if (!redisManager) return;
 
-    await redisManager.client.srem(`presence:${userId}:sockets`, socketId);
-    const activeSockets = await redisManager.client.scard(`presence:${userId}:sockets`);
+    await redisManager.removeFromSet(`presence:${userId}:sockets`, socketId);
+    const activeSockets = await redisManager.scard(`presence:${userId}:sockets`);
 
     if (activeSockets === 0) {
-      await redisManager.client.hset(`presence:${userId}`, {
+      await redisManager.hashSet(`presence:${userId}`, {
         status: 'offline',
         lastSeen: new Date().toISOString()
       });
@@ -42,8 +42,8 @@ class PresenceEngine {
    * Get user presence
    */
   async getPresence(userId) {
-    if (!redisManager.client) return { status: 'unknown' };
-    const data = await redisManager.client.hgetall(`presence:${userId}`);
+    if (!redisManager) return { status: 'unknown' };
+    const data = await redisManager.hashGetAll(`presence:${userId}`);
     return data && data.status ? data : { status: 'offline' };
   }
 
@@ -51,8 +51,8 @@ class PresenceEngine {
    * Get all active sockets for a user
    */
   async getUserSockets(userId) {
-    if (!redisManager.client) return [];
-    return await redisManager.client.smembers(`presence:${userId}:sockets`);
+    if (!redisManager) return [];
+    return await redisManager.getMembers(`presence:${userId}:sockets`);
   }
 }
 

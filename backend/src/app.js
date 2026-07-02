@@ -19,6 +19,11 @@ import blockRoutes from './routes/block.js';
 import discoveryRoutes from './routes/discovery.js';
 import interactionRoutes from './routes/interaction.js';
 import realtimeRoutes from './routes/realtime.js';
+import trustRoutes from './routes/trust.js';
+import moderationRoutes from './routes/moderation.js';
+import growthRoutes from './routes/growth.js';
+import aiRoutes from './routes/ai.js';
+import opsRoutes from './routes/ops.js';
 
 const app = express();
 
@@ -69,6 +74,11 @@ apiRouter.use('/block', blockRoutes);
 apiRouter.use('/discovery', discoveryRoutes);
 apiRouter.use('/interactions', interactionRoutes);
 apiRouter.use('/', realtimeRoutes); // Handles /api/conversations and /api/messages
+apiRouter.use('/trust', trustRoutes);
+apiRouter.use('/moderation', moderationRoutes);
+apiRouter.use('/growth', growthRoutes);
+apiRouter.use('/ai', aiRoutes);
+apiRouter.use('/ops', opsRoutes);
 
 import healthRoutes from './routes/health.js';
 app.use('/', healthRoutes);

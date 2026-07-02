@@ -13,7 +13,10 @@ export const discoveryService = {
     const cacheKey = `discovery:${userId}:page:${page}`;
     
     // 1. Check Redis Cache
-    const cachedData = await redisManager.get(cacheKey);
+    let cachedData = null;
+    if (redisManager.isHealthy()) {
+      cachedData = await redisManager.get(cacheKey);
+    }
     let cacheHit = false;
 
     if (cachedData) {
@@ -23,9 +26,13 @@ export const discoveryService = {
       return JSON.parse(cachedData);
     }
 
-    // 2. Fetch User Profile and Preferences
+    // 2. Fetch User and Preferences
     const currentUser = await profileService.getProfileByUserId(userId);
-    if (!currentUser.latitude || !currentUser.longitude) {
+    
+    if (!currentUser) {
+      throw new NotFoundError('Profile not found. Please complete onboarding.');
+    }
+    if (currentUser.latitude == null || currentUser.longitude == null) {
       throw new ValidationError('Location must be set before accessing discovery.');
     }
 
@@ -36,7 +43,9 @@ export const discoveryService = {
     const recommendations = await recommendationEngine.getRecommendations(currentUser, preferences, limit);
 
     // 4. Cache in Redis (TTL: 5 minutes to keep freshness)
-    await redisManager.setEx(cacheKey, 300, JSON.stringify(recommendations));
+    if (redisManager.isHealthy()) {
+      await redisManager.setEx(cacheKey, 300, JSON.stringify(recommendations));
+    }
     
     // Record analytics asynchronously
     this.recordMetrics(userId, 'requested', null, false).catch(() => {});

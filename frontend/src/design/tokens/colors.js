@@ -1,0 +1,56 @@
+export const colors = {
+  primary: '#005ab7',
+  primaryContainer: '#0072e5',
+  onPrimary: '#ffffff',
+  onPrimaryContainer: '#fefcff',
+  primaryFixed: '#d7e2ff',
+  primaryFixedDim: '#abc7ff',
+  onPrimaryFixed: '#001b3f',
+  onPrimaryFixedVariant: '#004590',
+
+  secondary: '#5d5e5f',
+  secondaryContainer: '#e0dfdf',
+  onSecondary: '#ffffff',
+  onSecondaryContainer: '#626363',
+  secondaryFixed: '#e3e2e2',
+  secondaryFixedDim: '#c6c6c6',
+  onSecondaryFixed: '#1a1c1c',
+  onSecondaryFixedVariant: '#464747',
+
+  tertiary: '#702ede',
+  tertiaryContainer: '#8a4ef8',
+  onTertiary: '#ffffff',
+  onTertiaryContainer: '#fffbff',
+  tertiaryFixed: '#eaddff',
+  tertiaryFixedDim: '#d2bbff',
+  onTertiaryFixed: '#25005a',
+  onTertiaryFixedVariant: '#5a00c6',
+
+  surface: '#f9f9ff',
+  surfaceBright: '#f9f9ff',
+  surfaceDim: '#d7dae4',
+  surfaceVariant: '#e0e2ed',
+  surfaceContainer: '#ebedf8',
+  surfaceContainerLow: '#f1f3fe',
+  surfaceContainerHigh: '#e6e8f3',
+  surfaceContainerHighest: '#e0e2ed',
+  surfaceContainerLowest: '#ffffff',
+  surfaceTint: '#005cbc',
+
+  background: '#f9f9ff',
+  onBackground: '#181c23',
+  onSurface: '#181c23',
+  onSurfaceVariant: '#414754',
+
+  outline: '#717786',
+  outlineVariant: '#c1c6d7',
+
+  error: '#ba1a1a',
+  errorContainer: '#ffdad6',
+  onError: '#ffffff',
+  onErrorContainer: '#93000a',
+
+  inverseSurface: '#2d3039',
+  inverseOnSurface: '#eef0fb',
+  inversePrimary: '#abc7ff'
+};
