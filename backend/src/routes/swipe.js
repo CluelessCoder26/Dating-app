@@ -1,5 +1,5 @@
 import express from 'express';
-import prisma from '../db.js';
+import prisma from '../config/prisma.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 import { eloQueue } from '../queues.js';
 import redisClient from '../redis.js';

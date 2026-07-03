@@ -39,7 +39,7 @@ class AuthService {
         create: { email, code: otpCode, type: 'verification', expiresAt }
       });
 
-      await tx.auditLog.create({
+      await tx.securityAudit.create({
         data: {
           userId: txUser.id,
           action: 'register',

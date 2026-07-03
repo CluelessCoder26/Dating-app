@@ -1,5 +1,5 @@
 import express from 'express';
-import prisma from '../db.js';
+import prisma from '../config/prisma.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
 import { asyncHandler } from '../utils/asyncHandler.js';
