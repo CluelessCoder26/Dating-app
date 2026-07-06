@@ -21,6 +21,53 @@ function App() {
   // Match interaction state passing
   const [selectedMatch, setSelectedMatch] = useState(null); // { matchId, profile }
 
+  // Notifications state
+  const [unreadLikes, setUnreadLikes] = useState(() => parseInt(localStorage.getItem('unreadLikes') || '0', 10));
+  const [unreadMessages, setUnreadMessages] = useState(() => parseInt(localStorage.getItem('unreadMessages') || '0', 10));
+
+  useEffect(() => {
+    localStorage.setItem('unreadLikes', unreadLikes);
+  }, [unreadLikes]);
+
+  useEffect(() => {
+    localStorage.setItem('unreadMessages', unreadMessages);
+  }, [unreadMessages]);
+
+  useEffect(() => {
+    if (activeTab === 'favorite') setUnreadLikes(0);
+    if (activeTab === 'matches') setUnreadMessages(0);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!token) return;
+    const socket = api.getSocket();
+    if (!socket) return;
+
+    const onLike = () => {
+      if (activeTab !== 'favorite') setUnreadLikes(prev => prev + 1);
+    };
+    const onMatch = () => {
+      if (activeTab !== 'matches') setUnreadMessages(prev => prev + 1);
+    };
+    const onMessage = () => {
+      if (activeTab !== 'matches') setUnreadMessages(prev => prev + 1);
+    };
+
+    socket.on('like_received', onLike);
+    socket.on('match_created', onMatch);
+    socket.on('match.created', onMatch);
+    socket.on('recv_msg', onMessage);
+    socket.on('message.delivered', onMessage);
+
+    return () => {
+      socket.off('like_received', onLike);
+      socket.off('match_created', onMatch);
+      socket.off('match.created', onMatch);
+      socket.off('recv_msg', onMessage);
+      socket.off('message.delivered', onMessage);
+    };
+  }, [token, activeTab]);
+
   // Load user profile context
   const loadProfileContext = async () => {
     const currentToken = localStorage.getItem('token');
@@ -79,12 +126,11 @@ function App() {
     return <Splash onFinish={() => setShowSplash(false)} />;
   }
 
-  // Render Auth screen or Onboarding flow if session profile details are incomplete
   if (!token || token === 'pending_onboarding' || (!loadingProfile && !myProfile)) {
     const isTokenValid = token && token !== 'pending_onboarding';
     return (
       <OnboardingFlow 
-        initialStep={isTokenValid ? 4 : 0}
+        initialStep={isTokenValid ? 4 : 1}
         onComplete={handleOnboardingComplete} 
         onExit={handleLogout} 
       />
@@ -179,28 +225,38 @@ function App() {
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'discover' ? "'FILL' 1" : "'FILL' 0" }}>explore</span>
         </button>
 
-        {/* Favorite icon (Platinum Hub) */}
+        {/* Favorite icon (Platinum Hub / Likes) */}
         <button 
           onClick={() => { setActiveTab('favorite'); setSelectedMatch(null); }}
-          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+          className={`relative flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
             activeTab === 'favorite' 
               ? 'bg-primary-container text-on-primary-container rounded-full' 
               : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'favorite' ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
+          {unreadLikes > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-sm ring-2 ring-surface">
+              {unreadLikes > 99 ? '99+' : unreadLikes}
+            </span>
+          )}
         </button>
 
         {/* Matches Tab (forum) */}
         <button 
           onClick={() => setActiveTab('matches')}
-          className={`flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
+          className={`relative flex flex-col items-center justify-center p-3 active:scale-90 transition-transform ${
             activeTab === 'matches' 
               ? 'bg-primary-container text-on-primary-container rounded-full' 
               : 'text-on-surface-variant hover:bg-surface-container-high transition-colors'
           }`}
         >
           <span className="material-symbols-outlined text-[26px]" style={{ fontVariationSettings: activeTab === 'matches' ? "'FILL' 1" : "'FILL' 0" }}>forum</span>
+          {unreadMessages > 0 && (
+            <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-white shadow-sm ring-2 ring-surface">
+              {unreadMessages > 99 ? '99+' : unreadMessages}
+            </span>
+          )}
         </button>
 
         {/* Profile Tab (person) */}

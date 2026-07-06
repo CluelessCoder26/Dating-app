@@ -2,7 +2,6 @@ import request from 'supertest';
 import app from '../../src/app.js';
 import prisma from '../../src/config/prisma.js';
 import { jwtService } from '../../src/services/jwt.service.js';
-import { matchEngine } from '../../src/services/interaction/MatchEngine.js';
 
 describe('End-to-End User Journey', () => {
   let user1Token;
@@ -76,8 +75,9 @@ describe('End-to-End User Journey', () => {
       .get('/api/discovery')
       .set('Authorization', `Bearer ${user1Token}`);
     
-    // Might be 200 or might require premium, checking basic connectivity
     expect(res.statusCode).toBe(200);
+    expect(res.body).toHaveProperty('profiles');
+    expect(res.body).toHaveProperty('empty');
   });
 
   it('Step 2: User 1 swipes right on User 2', async () => {
@@ -98,27 +98,18 @@ describe('End-to-End User Journey', () => {
     
     expect(res.statusCode).toBe(200);
     expect(res.body).toHaveProperty('success', true);
-    
-    // Simulate background queue processing
-    await matchEngine.detectMatch({ actorId: user2Id, targetId: user1Id });
-    await new Promise(resolve => setTimeout(resolve, 500));
+    expect(res.body).toHaveProperty('isMatch', true);
   });
 
   it('Step 4: User 1 gets AI Compatibility', async () => {
-    let match = null;
-    // Poll for match creation (up to 2 seconds)
-    for (let i = 0; i < 10; i++) {
-      match = await prisma.match.findFirst({
-        where: { 
-          OR: [
-            { user1Id: user1Id, user2Id: user2Id },
-            { user1Id: user2Id, user2Id: user1Id }
-          ]
-        }
-      });
-      if (match) break;
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
+    const match = await prisma.match.findFirst({
+      where: { 
+        OR: [
+          { user1Id: user1Id, user2Id: user2Id },
+          { user1Id: user2Id, user2Id: user1Id }
+        ]
+      }
+    });
     
     expect(match).not.toBeNull();
     

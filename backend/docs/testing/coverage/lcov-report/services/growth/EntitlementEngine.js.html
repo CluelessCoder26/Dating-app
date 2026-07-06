@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">6.25% </span>
+                <span class="strong">56.25% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>1/16</span>
+                <span class='fraction'>9/16</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">33.33% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/6</span>
+                <span class='fraction'>2/6</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">66.66% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/3</span>
+                <span class='fraction'>2/3</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">6.66% </span>
+                <span class="strong">60% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>1/15</span>
+                <span class='fraction'>9/15</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line medium'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -117,19 +117,19 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -140,44 +140,44 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-no">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">13x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">16x</span>
 <span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import prisma from '../../config/prisma.js';
 import redisManager from '../../config/redis.js';
 import logger from '../../utils/logger.js';
 &nbsp;
 class EntitlementEngine {
-<span class="fstat-no" title="function not covered" >  as</span>ync canUserAccess(userId, featureKey) {
-<span class="cstat-no" title="statement not covered" >    if (!redisManager) {</span>
+  async canUserAccess(userId, featureKey) {
+    <span class="missing-if-branch" title="if path not taken" >I</span>if (!redisManager) {
 <span class="cstat-no" title="statement not covered" >      return await this._checkDb(userId, featureKey);</span>
     }
-    const cached = <span class="cstat-no" title="statement not covered" >await redisManager.get(`entitlement:${userId}:${featureKey}`);</span>
-<span class="cstat-no" title="statement not covered" >    if (cached !== null) <span class="cstat-no" title="statement not covered" >return cached === 'true';</span></span>
+    const cached = await redisManager.get(`entitlement:${userId}:${featureKey}`);
+    <span class="missing-if-branch" title="if path not taken" >I</span>if (cached !== null) <span class="cstat-no" title="statement not covered" >return cached === 'true';</span>
 &nbsp;
-    const hasAccess = <span class="cstat-no" title="statement not covered" >await this._checkDb(userId, featureKey);</span>
-<span class="cstat-no" title="statement not covered" >    await redisManager.setEx(`entitlement:${userId}:${featureKey}`, 3600, String(hasAccess));</span>
-<span class="cstat-no" title="statement not covered" >    return hasAccess;</span>
+    const hasAccess = await this._checkDb(userId, featureKey);
+    await redisManager.setEx(`entitlement:${userId}:${featureKey}`, 3600, String(hasAccess));
+    return hasAccess;
   }
 &nbsp;
-<span class="fstat-no" title="function not covered" >  as</span>ync _checkDb(userId, featureKey) {
-    const entitlement = <span class="cstat-no" title="statement not covered" >await prisma.entitlement.findFirst({</span>
+  async _checkDb(userId, featureKey) {
+    const entitlement = await prisma.entitlement.findFirst({
       where: {
         subscription: { userId, status: 'active' },
         feature: { key: featureKey },
@@ -188,7 +188,7 @@ class EntitlementEngine {
         ]
       }
     });
-<span class="cstat-no" title="statement not covered" >    return !!entitlement;</span>
+    return !!entitlement;
   }
 &nbsp;
 <span class="fstat-no" title="function not covered" >  as</span>ync grantEntitlement(subscriptionId, featureKey) {
@@ -214,7 +214,7 @@ export const entitlementEngine = new EntitlementEngine();
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-07-02T12:35:58.256Z
+                at 2026-07-06T06:05:50.897Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

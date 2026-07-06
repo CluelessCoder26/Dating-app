@@ -1,50 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../api';
-import ReactCountryFlag from "react-country-flag";
+import PhoneInput from './auth/PhoneInput.jsx';
+import {
+  formatPhoneInput,
+  getStoredPhoneCountry,
+  stripPhoneDigits,
+  validatePhoneForCountry,
+  validateRegisterPassword,
+} from '../utils/phone.js';
 import bgImage from '../assets/image.png';
-
-const COUNTRY_CODES = [
-  { code: '+1',   country: 'US' },
-  { code: '+1',   country: 'CA'},
-  { code: '+44',  country: 'UK' },
-  { code: '+91',  country: 'IN' },
-  { code: '+61',  country: 'AU' },
-  { code: '+81',  country: 'JP'},
-  { code: '+49',  country: 'DE' },
-  { code: '+33',  country: 'FR' },
-  { code: '+86',  country: 'CN' },
-  { code: '+55',  country: 'BR' },
-  { code: '+52',  country: 'MX' },
-  { code: '+971', country: 'AE'},
-  { code: '+27',  country: 'ZA' },
-  { code: '+39',  country: 'IT' },
-  { code: '+34',  country: 'ES' },
-  { code: '+82',  country: 'KR' },
-  { code: '+7',   country: 'RU' },
-  { code: '+90',  country: 'TR' },
-  { code: '+966', country: 'SA' },
-  { code: '+54',  country: 'AR'},
-  { code: '+234', country: 'NG' },
-  { code: '+20',  country: 'EG' },
-  { code: '+62',  country: 'ID' },
-  { code: '+92',  country: 'PK' },
-  { code: '+880', country: 'BD' },
-  { code: '+63',  country: 'PH' },
-  { code: '+84',  country: 'VN' },
-  { code: '+66',  country: 'TH' },
-  { code: '+60',  country: 'MY' },
-  { code: '+65',  country: 'SG' },
-  { code: '+64',  country: 'NZ'},
-  { code: '+46',  country: 'SE'},
-  { code: '+47',  country: 'NO' },
-  { code: '+358', country: 'FI' },
-  { code: '+45',  country: 'DK' },
-  { code: '+31',  country: 'NL' },
-  { code: '+32',  country: 'BE' },
-  { code: '+41',  country: 'CH' },
-  { code: '+43',  country: 'AT' },
-];
 
 const INTEREST_OPTIONS = [
   { icon: 'palette',         label: 'Art & Design' },
@@ -87,6 +52,8 @@ const STEP_CONTENT = {
   10: { title: "Enable Location", subtitle: "Find compatible matches nearby." },
   11: { title: "Never Miss a Spark", subtitle: "Stay updated on new matches and messages." },
   12: { title: "Ready to Spark?", subtitle: "Your profile is beautifully crafted." },
+  13: { title: "Reset Password", subtitle: "Enter your email to receive a reset code." },
+  14: { title: "Set New Password", subtitle: "Enter the code and your new password." },
 };
 
 /* ─── Reusable UI Components ─────────────────────────────────────────────── */
@@ -189,7 +156,7 @@ const GlassCard = ({ children, className = '' }) => (
     animate={{ opacity: 1, y: 0, scale: 1 }}
     exit={{ opacity: 0, y: 20, scale: 0.95 }}
     transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-    className={`rounded-[32px] p-6 md:p-8 relative overflow-hidden w-full ${className}`}
+    className={`rounded-[32px] p-6 md:p-8 relative w-full ${className}`}
     style={{
       background: 'rgba(255,255,255,0.06)',
       backdropFilter: 'blur(32px)',
@@ -278,76 +245,6 @@ const GlassInput = ({ icon, ...props }) => (
   </div>
 );
 
-function CountryDropdown({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const ref = useRef(null);
-
-  const selected = COUNTRY_CODES.find(c => c.code === value && (value !== '+1' || c.country === 'US')) || COUNTRY_CODES[0];
-  const filtered = search ? COUNTRY_CODES.filter(c => c.country.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search)) : COUNTRY_CODES;
-
-  useEffect(() => {
-    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) { setOpen(false); setSearch(''); } };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  return (
-    <div ref={ref} className="relative h-full">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full h-full min-h-[58px] flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-2xl px-3 transition-all focus:outline-none text-white focus:border-white/40 focus:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-      >
-        <ReactCountryFlag countryCode={selected.country === "UK" ? "GB" : selected.country} svg style={{ width: "24px", height: "24px", borderRadius: "4px" }} />
-        <span className="font-semibold text-[16px]">{selected.code}</span>
-        <span className="material-symbols-outlined text-[18px] opacity-70">expand_more</span>
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-            transition={{ duration: 0.2 }}
-            className="absolute left-0 top-full mt-2 z-50 bg-black/80 backdrop-blur-xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden w-[260px]"
-          >
-            <div className="p-2 border-b border-white/10">
-              <input
-                autoFocus
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search..."
-                className="w-full bg-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder-white/50 outline-none focus:bg-white/20 transition-colors"
-              />
-            </div>
-            <ul className="max-h-56 overflow-y-auto p-1 custom-scrollbar">
-              {filtered.map((c, idx) => {
-                const isActive = c.code === value && c.country === selected.country;
-                return (
-                  <li key={`${c.code}-${c.country}-${idx}`}>
-                    <button
-                      type="button"
-                      onClick={() => { onChange(c.code); setOpen(false); setSearch(''); }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-colors text-left ${isActive ? 'bg-gradient-to-r from-blue-600/80 to-cyan-500/80 font-semibold' : 'hover:bg-white/10'}`}
-                    >
-                      <ReactCountryFlag countryCode={c.country === "UK" ? "GB" : c.country} svg style={{ width: "20px", height: "20px", borderRadius: "4px" }} />
-                      <span className={`flex-1 ${isActive ? 'text-white' : 'text-white/90'}`}>{c.country}</span>
-                      <span className="text-white/60 text-xs">{c.code}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 /* ─── Success Outros ──────────────────────────────────────────────────────── */
 
 const LoveSuccessOutro = ({ onComplete }) => {
@@ -424,13 +321,16 @@ const WelcomeBackOutro = ({ onComplete }) => {
 
 /* ─── Main Component ──────────────────────────────────────────────────────── */
 
-export default function OnboardingFlow({ onComplete, onExit }) {
-  const [step, setStep] = useState(0);
+export default function OnboardingFlow({ initialStep = 0, onComplete, onExit }) {
+  const [step, setStep] = useState(initialStep);
   const [successMode, setSuccessMode] = useState(null); // 'login' | 'signup'
 
+  const [loginMethod, setLoginMethod] = useState('email');
   const [identifier, setIdentifier] = useState('');
+  const [loginPhoneCountry, setLoginPhoneCountry] = useState(() => getStoredPhoneCountry());
+  const [loginPhone, setLoginPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [countryCode, setCountryCode] = useState('+1');
+  const [phoneCountry, setPhoneCountry] = useState(() => getStoredPhoneCountry());
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -445,6 +345,9 @@ export default function OnboardingFlow({ onComplete, onExit }) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const [resetCode, setResetCode] = useState(['', '', '', '', '', '']);
+  const [newPassword, setNewPassword] = useState('');
 
   const triggerError = (msg) => {
     setError(msg);
@@ -461,18 +364,37 @@ export default function OnboardingFlow({ onComplete, onExit }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleLoginPhoneCountryChange = (country) => {
+    setLoginPhoneCountry(country);
+    setLoginPhone(formatPhoneInput(stripPhoneDigits(loginPhone), country));
+  };
+
+  const handleRegisterPhoneCountryChange = (country) => {
+    setPhoneCountry(country);
+    setPhone(formatPhoneInput(stripPhoneDigits(phone), country));
+  };
+
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!identifier.trim()) return triggerError('Please enter your email or phone.');
-    if (password.length < 6) return triggerError('Please enter your password.');
+    const passwordError = validateRegisterPassword(password);
+    if (passwordError) return triggerError(passwordError);
+
+    let loginIdentifier = identifier.trim();
+    if (loginMethod === 'phone') {
+      const phoneCheck = validatePhoneForCountry(loginPhone, loginPhoneCountry);
+      if (!phoneCheck.valid) return triggerError(phoneCheck.message);
+      loginIdentifier = phoneCheck.e164;
+    } else if (!loginIdentifier) {
+      return triggerError('Please enter your email.');
+    }
     
     setLoading(true);
     try {
-      await api.login(identifier, password);
+      await api.login(loginIdentifier, password);
       setSuccessMode('login');
     } catch (err) {
       if (err.message && err.message.includes('verify your email')) {
-        setEmail(err.unverifiedEmail || identifier); // Best effort
+        setEmail(err.unverifiedEmail || loginIdentifier);
         setStep(2);
       } else {
         triggerError(err.message || 'Login failed. Check your credentials.');
@@ -484,15 +406,15 @@ export default function OnboardingFlow({ onComplete, onExit }) {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    const cleanPhone = phone.replace(/\s+/g, '');
-    if (!/^\d{7,14}$/.test(cleanPhone)) return triggerError('Please enter a valid phone number.');
+    const phoneCheck = validatePhoneForCountry(phone, phoneCountry);
+    if (!phoneCheck.valid) return triggerError(phoneCheck.message);
     if (!email || !email.includes('@')) return triggerError('Please enter a valid email address.');
-    if (password.length < 6) return triggerError('Password must be at least 6 characters.');
+    const passwordError = validateRegisterPassword(password);
+    if (passwordError) return triggerError(passwordError);
     
     setLoading(true);
     try {
-      const fullPhoneNumber = `${countryCode}${cleanPhone}`;
-      await api.register(fullPhoneNumber, email, password);
+      await api.register(phoneCheck.e164, email, password);
       setStep(2);
     } catch (err) {
       triggerError(err.message || 'Registration failed. Try again.');
@@ -513,6 +435,39 @@ export default function OnboardingFlow({ onComplete, onExit }) {
       setStep(4);
     } catch (err) {
       triggerError(err.message || 'Invalid or expired code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordSubmit = async (e) => {
+    e.preventDefault();
+    if (!email || !email.includes('@')) return triggerError('Please enter a valid email address.');
+    setLoading(true);
+    try {
+      await api.forgotPassword(email);
+      setStep(14);
+    } catch (err) {
+      triggerError(err.message || 'Failed to send reset code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e) => {
+    e.preventDefault();
+    const code = resetCode.join('');
+    if (code.length !== 6) return triggerError('Please enter the 6-digit reset code.');
+    const passwordError = validateRegisterPassword(newPassword);
+    if (passwordError) return triggerError(passwordError);
+    
+    setLoading(true);
+    try {
+      await api.resetPassword(email, code, newPassword);
+      setStep(0);
+      setTimeout(() => alert('Password reset successful! Please log in.'), 300);
+    } catch (err) {
+      triggerError(err.message || 'Failed to reset password.');
     } finally {
       setLoading(false);
     }
@@ -609,7 +564,10 @@ export default function OnboardingFlow({ onComplete, onExit }) {
         const isPrimary = i === 0;
         const img = photos[i];
         if (img.startsWith('data:image')) {
-          await api.uploadPhoto(img, isPrimary);
+          const fetched = await fetch(img);
+          const blob = await fetched.blob();
+          const file = new File([blob], `photo_${i}.jpg`, { type: blob.type });
+          await api.uploadPhoto(file, isPrimary);
         } else {
           await fetch('http://localhost:5000/api/photos/upload', {
             method: 'POST',
@@ -688,13 +646,44 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                 {step === 0 && (
                   <form onSubmit={handleLoginSubmit} className="space-y-6">
                     <LogoBadge />
-                    <GlassInput icon="person" type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="Email or Mobile Number" required />
-                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required />
+                    <div className="flex rounded-2xl bg-white/5 border border-white/10 p-1 gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod('email')}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${loginMethod === 'email' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white/80'}`}
+                      >
+                        Email
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLoginMethod('phone')}
+                        className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${loginMethod === 'phone' ? 'bg-white/15 text-white' : 'text-white/60 hover:text-white/80'}`}
+                      >
+                        Phone
+                      </button>
+                    </div>
+                    {loginMethod === 'email' ? (
+                      <GlassInput icon="mail" type="email" value={identifier} onChange={(e) => setIdentifier(e.target.value)} placeholder="Email Address" required autoComplete="email" />
+                    ) : (
+                      <PhoneInput
+                        country={loginPhoneCountry}
+                        onCountryChange={handleLoginPhoneCountryChange}
+                        value={loginPhone}
+                        onChange={setLoginPhone}
+                        placeholder="Mobile Number"
+                        required
+                      />
+                    )}
+                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required autoComplete="current-password" />
                     <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Login</PrimaryButton>
                     <div className="text-center pt-2">
                       <p className="text-[15px] font-medium text-white/70">
                         New to Spark?{' '}
                         <button type="button" onClick={startRegistration} className="font-bold text-white hover:text-blue-400 transition-colors">Create Account</button>
+                      </p>
+                      <p className="text-[15px] font-medium text-white/70 mt-2">
+                        Forgot your password?{' '}
+                        <button type="button" onClick={() => setStep(13)} className="font-bold text-white hover:text-blue-400 transition-colors">Reset Here</button>
                       </p>
                     </div>
                   </form>
@@ -704,12 +693,16 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                 {step === 1 && (
                   <form onSubmit={handleRegisterSubmit} className="space-y-6">
                     <LogoBadge />
-                    <div className="flex gap-3">
-                      <div className="w-[120px]"><CountryDropdown value={countryCode} onChange={setCountryCode} /></div>
-                      <div className="flex-1"><GlassInput type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Mobile Number" required /></div>
-                    </div>
+                    <PhoneInput
+                      country={phoneCountry}
+                      onCountryChange={handleRegisterPhoneCountryChange}
+                      value={phone}
+                      onChange={setPhone}
+                      placeholder="Mobile Number"
+                      required
+                    />
                     <GlassInput icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email Address (for OTP Verification)" required />
-                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (min 6 chars)" required />
+                    <GlassInput icon="lock" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password (8+ chars, mixed case, number, symbol)" required />
                     
                     <p className="text-[13px] font-medium text-white/60 flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px]">lock</span> Verification code will be sent to your email.</p>
                     <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Continue</PrimaryButton>
@@ -904,6 +897,40 @@ export default function OnboardingFlow({ onComplete, onExit }) {
                     </div>
                     <PrimaryButton onClick={saveCompleteProfile} loading={loading} icon="auto_awesome">Enter Spark</PrimaryButton>
                   </div>
+                )}
+
+                {/* ── STEP 13: Forgot Password ── */}
+                {step === 13 && (
+                  <form onSubmit={handleForgotPasswordSubmit} className="space-y-6">
+                    <LogoBadge />
+                    <GlassInput icon="mail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Enter your registered email" required />
+                    <PrimaryButton type="submit" loading={loading} icon="arrow_forward">Send Reset Code</PrimaryButton>
+                    <div className="text-center pt-2">
+                      <button type="button" onClick={startLogin} className="font-bold text-white/70 hover:text-white transition-colors">Back to Login</button>
+                    </div>
+                  </form>
+                )}
+
+                {/* ── STEP 14: Reset Password ── */}
+                {step === 14 && (
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-8">
+                    <p className="text-center text-white/80 font-medium mb-4">Code sent to <strong>{email}</strong></p>
+                    <div className="flex justify-between gap-2">
+                      {resetCode.map((val, idx) => (
+                        <input
+                          key={idx} id={`reset-otp-${idx}`} type="text" maxLength="1" inputMode="numeric" value={val}
+                          onChange={(e) => {
+                            const v = e.target.value; const newOtp = [...resetCode]; newOtp[idx] = v; setResetCode(newOtp);
+                            if (v && idx < 5) document.getElementById(`reset-otp-${idx + 1}`).focus();
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Backspace' && !val && idx > 0) document.getElementById(`reset-otp-${idx - 1}`).focus(); }}
+                          className="w-12 h-14 md:w-14 md:h-16 text-center font-bold text-2xl border border-white/20 bg-white/5 focus:bg-white/10 focus:border-white/50 text-white rounded-2xl outline-none transition-all shadow-inner"
+                        />
+                      ))}
+                    </div>
+                    <GlassInput icon="lock" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="New Password (8+ chars, mixed case, number, symbol)" required />
+                    <PrimaryButton type="submit" loading={loading} icon="check">Reset Password</PrimaryButton>
+                  </form>
                 )}
               </GlassCard>
             </motion.div>

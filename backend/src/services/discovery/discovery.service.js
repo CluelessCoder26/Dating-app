@@ -5,30 +5,43 @@ import redisManager from '../../config/redis.js';
 import { NotFoundError, ValidationError } from '../../utils/errors.js';
 import { recommendationConfig } from '../../config/recommendation.js';
 
+const EMPTY_FEED = {
+  profiles: [],
+  pagination: { page: 1, pageSize: recommendationConfig.pageSize, hasMore: false, nextCursor: null, count: 0 },
+  empty: true,
+  message: 'No more profiles to show right now. Check back later or adjust your filters.',
+};
+
+function buildFeedResponse(result, page) {
+  const empty = !result.profiles || result.profiles.length === 0;
+  return {
+    profiles: result.profiles ?? [],
+    pagination: result.pagination ?? {
+      page,
+      pageSize: recommendationConfig.pageSize,
+      hasMore: false,
+      nextCursor: null,
+      count: 0,
+    },
+    empty,
+    message: empty ? EMPTY_FEED.message : undefined,
+  };
+}
+
 export const discoveryService = {
-  /**
-   * Retrieves recommended profiles, leveraging Redis caching
-   */
-  async getDiscoveryFeed(userId, page = 1) {
-    const cacheKey = `discovery:${userId}:page:${page}`;
-    
-    // 1. Check Redis Cache
-    let cachedData = null;
+  async getDiscoveryFeed(userId, { page = 1, cursor = null } = {}) {
+    const cacheKey = `discovery:${userId}:p${page}:c${cursor ?? 'none'}`;
+
     if (redisManager.isHealthy()) {
-      cachedData = await redisManager.get(cacheKey);
-    }
-    let cacheHit = false;
-
-    if (cachedData) {
-      cacheHit = true;
-      // Record analytics asynchronously
-      this.recordMetrics(userId, 'requested', null, true).catch(() => {});
-      return JSON.parse(cachedData);
+      const cachedData = await redisManager.get(cacheKey);
+      if (cachedData) {
+        this.recordMetrics(userId, 'requested', null, true).catch(() => {});
+        return JSON.parse(cachedData);
+      }
     }
 
-    // 2. Fetch User and Preferences
     const currentUser = await profileService.getProfileByUserId(userId);
-    
+
     if (!currentUser) {
       throw new NotFoundError('Profile not found. Please complete onboarding.');
     }
@@ -38,44 +51,37 @@ export const discoveryService = {
 
     const preferences = await profileService.getPreferences(userId);
 
-    // 3. Generate Recommendations via the Strategy Pipeline
-    const limit = recommendationConfig.pageSize;
-    const recommendations = await recommendationEngine.getRecommendations(currentUser, preferences, limit);
+    const result = await recommendationEngine.getRecommendations(currentUser, preferences, {
+      page,
+      pageSize: recommendationConfig.pageSize,
+      cursor,
+    });
 
-    // 4. Cache in Redis (TTL: 5 minutes to keep freshness)
+    const response = buildFeedResponse(result, page);
+
     if (redisManager.isHealthy()) {
-      await redisManager.setEx(cacheKey, 300, JSON.stringify(recommendations));
+      await redisManager.setEx(cacheKey, 300, JSON.stringify(response));
     }
-    
-    // Record analytics asynchronously
+
     this.recordMetrics(userId, 'requested', null, false).catch(() => {});
 
-    return recommendations;
+    return response;
   },
 
   async recordMetrics(userId, action, targetId = null, cacheHit = false) {
     try {
       await prisma.discoveryMetric.create({
-        data: {
-          userId,
-          action,
-          targetId,
-          cacheHit
-        }
+        data: { userId, action, targetId, cacheHit },
       });
     } catch (error) {
-      // Metrics shouldn't break the application, log and swallow
+      if (error.code === 'P2003') return; // Ignore FK constraint if user was deleted asynchronously
       console.error('Failed to log discovery metric:', error.message);
     }
   },
 
   async updatePreferences(userId, updateData) {
     const pref = await profileService.updatePreferences(userId, updateData);
-    
-    // Invalidate discovery caches for this user
-    const pattern = `discovery:${userId}:*`;
-    await redisManager.deletePattern(pattern);
-
+    await redisManager.deletePattern(`discovery:${userId}:*`);
     return pref;
-  }
+  },
 };

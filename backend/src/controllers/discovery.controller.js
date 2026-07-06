@@ -3,8 +3,9 @@ import { profileService } from '../services/profile.service.js';
 
 export const discoveryController = {
   async getDiscoveryFeed(req, res) {
-    const page = parseInt(req.query.page) || 1;
-    const feed = await discoveryService.getDiscoveryFeed(req.userId, page);
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const cursor = req.query.cursor || null;
+    const feed = await discoveryService.getDiscoveryFeed(req.userId, { page, cursor });
     res.json(feed);
   },
 
@@ -22,5 +23,5 @@ export const discoveryController = {
     const { action, targetId } = req.body;
     await discoveryService.recordMetrics(req.userId, action, targetId, false);
     res.json({ message: 'Action tracked' });
-  }
+  },
 };

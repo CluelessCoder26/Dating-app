@@ -26,7 +26,13 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
   const loadMatches = async () => {
     try {
       const data = await api.getMatches();
-      setMatches(data || []);
+      // Sort matches by newest activity (last message or match creation)
+      const sorted = (data || []).sort((a, b) => {
+        const tA = new Date(a.lastMessageAt || a.createdAt || 0).getTime();
+        const tB = new Date(b.lastMessageAt || b.createdAt || 0).getTime();
+        return tB - tA;
+      });
+      setMatches(sorted);
     } catch (err) {
       console.warn('Failed to load matches:', err.message);
     } finally {
@@ -37,6 +43,64 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
   useEffect(() => {
     loadMatches();
   }, []);
+
+  // Socket listeners for updating matches list in background
+  useEffect(() => {
+    const socket = api.getSocket();
+    if (!socket) return;
+
+    const onMatchCreated = (data) => {
+      const otherUserId = data.user1Id === myProfile.userId ? data.user2Id : data.user1Id;
+      api.getProfile(otherUserId).then(p => {
+        const newMatch = {
+          matchId: data.matchId,
+          profile: p,
+          createdAt: new Date().toISOString(),
+          unreadCount: 0
+        };
+        setMatches(prev => [newMatch, ...prev]);
+      });
+    };
+
+    const onRecvMsg = (msg) => {
+      setMatches(prev => {
+        const idx = prev.findIndex(m => m.matchId === msg.matchId);
+        if (idx === -1) return prev;
+        const m = prev[idx];
+        const isCurrentActive = activeMatch?.matchId === msg.matchId;
+        const updatedMatch = { 
+          ...m, 
+          lastMessageAt: msg.createdAt, 
+          lastMessageText: msg.isImage ? '📸 Image' : msg.text,
+          unreadCount: isCurrentActive ? 0 : ((m.unreadCount || 0) + 1)
+        };
+        const newList = [...prev];
+        newList.splice(idx, 1);
+        newList.unshift(updatedMatch);
+        return newList;
+      });
+    };
+
+    const onMsgRead = (data) => {
+      if (activeMatch && data.matchId === activeMatch.matchId) {
+        setMessages(prev => prev.map(m => m.readAt ? m : { ...m, readAt: new Date().toISOString() }));
+      }
+    };
+
+    socket.on('match_created', onMatchCreated);
+    socket.on('match.created', onMatchCreated);
+    socket.on('recv_msg', onRecvMsg);
+    socket.on('message.delivered', onRecvMsg);
+    socket.on('messages.read', onMsgRead);
+
+    return () => {
+      socket.off('match_created', onMatchCreated);
+      socket.off('match.created', onMatchCreated);
+      socket.off('recv_msg', onRecvMsg);
+      socket.off('message.delivered', onRecvMsg);
+      socket.off('messages.read', onMsgRead);
+    };
+  }, [myProfile.userId, activeMatch]);
 
   // Update activeMatch when prop changes (from Match success click)
   useEffect(() => {
@@ -58,6 +122,9 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
         const history = await api.getMessages(activeMatch.matchId);
         setMessages(history || []);
         await api.markMessagesRead(activeMatch.matchId);
+        
+        // Clear unread count in matches list
+        setMatches(prev => prev.map(m => m.matchId === activeMatch.matchId ? { ...m, unreadCount: 0 } : m));
       } catch (err) {
         console.error('Failed to load chat history:', err.message);
       } finally {
@@ -163,6 +230,49 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
     setInputText(text);
   };
 
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      showToast('Uploading image...', 'info');
+      const res = await api.uploadPhoto(file, false); // use /photos/upload endpoint
+      const imgUrl = res.photo.url;
+      
+      if (socketRef.current) {
+        socketRef.current.emit('send_msg', {
+          matchId: activeMatch.matchId,
+          targetUserId: activeMatch.profile.userId,
+          text: imgUrl,
+          isImage: true
+        });
+
+        const localMsg = {
+          id: Math.random().toString(),
+          matchId: activeMatch.matchId,
+          senderId: myProfile.userId,
+          text: imgUrl,
+          isImage: true,
+          createdAt: new Date().toISOString(),
+          readAt: null
+        };
+        setMessages((prev) => [...prev, localMsg]);
+        
+        // Update local matches list
+        setMatches(prev => {
+          const idx = prev.findIndex(m => m.matchId === activeMatch.matchId);
+          if (idx === -1) return prev;
+          const updated = { ...prev[idx], lastMessageAt: localMsg.createdAt, lastMessageText: '📸 Image' };
+          const newList = [...prev];
+          newList.splice(idx, 1);
+          newList.unshift(updated);
+          return newList;
+        });
+      }
+    } catch (err) {
+      showToast('Failed to upload image: ' + err.message, 'error');
+    }
+  };
+
   // Filtering matches based on search query
   const filteredMatches = matches.filter(m => 
     m.profile.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -205,6 +315,7 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
                       alt={m.profile.name} 
                       src={m.profile.photos?.[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
                       className="w-full h-full rounded-full object-cover" 
+                      loading="lazy"
                     />
                     <div className="absolute bottom-0 right-1 w-5 h-5 bg-tertiary rounded-full border-2 border-white flex items-center justify-center">
                       <span className="material-symbols-outlined text-[12px] text-white" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
@@ -256,19 +367,20 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
                     alt={m.profile.name} 
                     src={m.profile.photos?.[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
                     className="w-14 h-14 rounded-full object-cover shadow-sm" 
+                    loading="lazy"
                   />
                   <div className="absolute bottom-0 right-0 w-4 h-4 bg-primary border-2 border-white rounded-full"></div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline mb-1">
-                    <h3 className="font-title-md text-[16px] text-on-surface truncate">{m.profile.name}</h3>
-                    <span className="font-label-sm text-primary">Open Chat</span>
+                    <h3 className={`font-title-md text-[16px] truncate ${m.unreadCount ? 'font-bold text-on-surface' : 'text-on-surface'}`}>{m.profile.name}</h3>
+                    <span className="font-label-sm text-primary">{m.unreadCount ? `${m.unreadCount} NEW` : 'Open Chat'}</span>
                   </div>
-                  <p className="text-on-surface-variant font-body-md truncate font-medium">
-                    {m.profile.bio ? m.profile.bio.split('\n\n')[0] : 'Click to start chatting...'}
+                  <p className={`font-body-md truncate font-medium ${m.unreadCount ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                    {m.lastMessageText ? m.lastMessageText : (m.profile.bio ? m.profile.bio.split('\n\n')[0] : 'Click to start chatting...')}
                   </p>
                 </div>
-                <div className="w-2.5 h-2.5 bg-primary rounded-full spark-pulse"></div>
+                {m.unreadCount > 0 && <div className="w-2.5 h-2.5 bg-primary rounded-full spark-pulse"></div>}
               </div>
             ))
           )}
@@ -408,10 +520,11 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
             <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
           </div>
         ) : (
-          messages.map((msg) => {
+          messages.map((msg, idx) => {
             const isMe = msg.senderId === myProfile.userId;
+            const isRead = msg.readAt != null;
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
+              <div key={msg.id || idx} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in duration-300`}>
                 <div 
                   className={`max-w-[75%] px-4 py-3 rounded-[20px] text-xs leading-relaxed shadow-sm ${
                     isMe 
@@ -419,10 +532,21 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
                       : 'bg-white/80 text-on-surface border border-outline-variant/20 rounded-tl-none'
                   }`}
                 >
-                  <p>{msg.text}</p>
-                  <span className={`block text-[8px] mt-1.5 text-right ${isMe ? 'text-white/60' : 'text-on-surface-variant/50'}`}>
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
+                  {msg.isImage ? (
+                    <img src={msg.text} alt="Attachment" className="max-w-full rounded-lg mb-1" loading="lazy" />
+                  ) : (
+                    <p>{msg.text}</p>
+                  )}
+                  <div className={`flex items-center justify-end gap-1 mt-1.5 ${isMe ? 'text-white/60' : 'text-on-surface-variant/50'}`}>
+                    <span className="text-[8px]">
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {isMe && (
+                      <span className="material-symbols-outlined text-[10px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                        {isRead ? 'done_all' : 'check'}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             );
@@ -461,13 +585,15 @@ export default function MatchesAndChat({ myProfile, activeMatchInfo, onClearActi
           />
           
           <div className="flex items-center shrink-0 pr-1 gap-1">
-            <button type="button" className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center transform -rotate-45">
+            <label className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center transform -rotate-45 cursor-pointer">
+              <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
               <span className="material-symbols-outlined text-[22px]">attach_file</span>
-            </button>
+            </label>
             {!inputText.trim() && (
-              <button type="button" className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center">
+              <label className="text-on-surface-variant/70 hover:text-primary transition-colors p-1.5 flex items-center justify-center cursor-pointer">
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImageUpload} />
                 <span className="material-symbols-outlined text-[22px]">photo_camera</span>
-              </button>
+              </label>
             )}
           </div>
         </form>

@@ -6,6 +6,7 @@ import { jwtService } from './jwt.service.js';
 
 class AuthService {
   async registerUser({ phone, email, password }, ipAddress) {
+    const normalizedEmail = email ? email.toLowerCase() : email;
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
@@ -14,29 +15,33 @@ class AuthService {
     // 1. Database operations inside transaction
     const user = await prisma.$transaction(async (tx) => {
       const existingUser = await tx.user.findFirst({
-        where: { OR: [{ phone }, { email }] }
+        where: { OR: [{ phone }, { email: normalizedEmail }] }
       });
 
       if (existingUser && existingUser.emailVerified) {
-        throw new ConflictError('User with this phone or email already exists and is verified');
+        if (existingUser.phone === phone) {
+          throw new ConflictError('User with this phone number already exists.');
+        } else {
+          throw new ConflictError('User with this email already exists.');
+        }
       }
 
       let txUser;
       if (existingUser) {
         txUser = await tx.user.update({
           where: { id: existingUser.id },
-          data: { phone, email, passwordHash, emailVerified: false }
+          data: { phone, email: normalizedEmail, passwordHash, emailVerified: false }
         });
       } else {
         txUser = await tx.user.create({
-          data: { phone, email, passwordHash, emailVerified: false, role: 'user', status: 'active' }
+          data: { phone, email: normalizedEmail, passwordHash, emailVerified: false, role: 'user', status: 'active' }
         });
       }
 
       await tx.otp.upsert({
-        where: { email_type: { email, type: 'verification' } },
+        where: { email_type: { email: normalizedEmail, type: 'verification' } },
         update: { code: otpCode, expiresAt },
-        create: { email, code: otpCode, type: 'verification', expiresAt }
+        create: { email: normalizedEmail, code: otpCode, type: 'verification', expiresAt }
       });
 
       await tx.securityAudit.create({
@@ -52,7 +57,7 @@ class AuthService {
     });
 
     // 2. External side-effects outside transaction
-    await emailService.sendOtpEmail(email, otpCode, 'verification').catch(e => {
+    await emailService.sendOtpEmail(normalizedEmail, otpCode, 'verification').catch(e => {
       console.error('Failed to send OTP email:', e);
     });
 
@@ -60,8 +65,9 @@ class AuthService {
   }
 
   async verifyOtp({ email, code }, ipAddress) {
+    const normalizedEmail = email ? email.toLowerCase() : email;
     const otpRecord = await prisma.otp.findUnique({
-      where: { email_type: { email, type: 'verification' } }
+      where: { email_type: { email: normalizedEmail, type: 'verification' } }
     });
 
     if (!otpRecord || otpRecord.code !== code || otpRecord.expiresAt < new Date()) {
@@ -69,13 +75,13 @@ class AuthService {
     }
 
     const user = await prisma.user.update({
-      where: { email },
+      where: { email: normalizedEmail },
       data: { emailVerified: true }
     });
 
     await prisma.otp.delete({ where: { id: otpRecord.id } });
 
-    await emailService.sendWelcomeEmail(email, user.phone || 'User');
+    await emailService.sendWelcomeEmail(normalizedEmail, user.phone || 'User');
     await this.logAudit(user.id, 'email_verified', ipAddress, 'Email successfully verified');
 
     const accessToken = jwtService.generateAccessToken(user);
@@ -85,9 +91,10 @@ class AuthService {
   }
 
   async login({ identifier, password }, ipAddress) {
+    const normalizedIdentifier = identifier ? identifier.toLowerCase() : identifier;
     const user = await prisma.user.findFirst({
       where: {
-        OR: [{ phone: identifier }, { email: identifier }]
+        OR: [{ phone: identifier }, { email: normalizedIdentifier }]
       }
     });
 
@@ -138,28 +145,29 @@ class AuthService {
   }
 
   async requestPasswordReset(email, ipAddress) {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = email ? email.toLowerCase() : email;
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (!user) {
-      // Return success anyway to prevent email enumeration
-      return;
+      throw new AuthenticationError('No account found with that email address.');
     }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await prisma.otp.upsert({
-      where: { email_type: { email, type: 'password_reset' } },
+      where: { email_type: { email: normalizedEmail, type: 'password_reset' } },
       update: { code: otpCode, expiresAt },
-      create: { email, code: otpCode, type: 'password_reset', expiresAt }
+      create: { email: normalizedEmail, code: otpCode, type: 'password_reset', expiresAt }
     });
 
-    await emailService.sendOtpEmail(email, otpCode, 'password_reset');
+    await emailService.sendOtpEmail(normalizedEmail, otpCode, 'password_reset');
     await this.logAudit(user.id, 'password_reset_requested', ipAddress, 'Password reset OTP generated');
   }
 
   async resetPassword({ email, code, newPassword }, ipAddress) {
+    const normalizedEmail = email ? email.toLowerCase() : email;
     const otpRecord = await prisma.otp.findUnique({
-      where: { email_type: { email, type: 'password_reset' } }
+      where: { email_type: { email: normalizedEmail, type: 'password_reset' } }
     });
 
     if (!otpRecord || otpRecord.code !== code || otpRecord.expiresAt < new Date()) {
@@ -170,7 +178,7 @@ class AuthService {
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
     const user = await prisma.user.update({
-      where: { email },
+      where: { email: normalizedEmail },
       data: { passwordHash, failedLoginAttempts: 0, status: 'active', lockoutUntil: null }
     });
 
@@ -179,7 +187,7 @@ class AuthService {
     // Revoke all existing sessions globally on password reset
     await jwtService.revokeAllUserTokens(user.id);
 
-    await emailService.sendPasswordChangedEmail(email);
+    await emailService.sendPasswordChangedEmail(normalizedEmail);
     await this.logAudit(user.id, 'password_reset_completed', ipAddress, 'Password changed successfully');
   }
 

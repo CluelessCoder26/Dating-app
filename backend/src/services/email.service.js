@@ -49,6 +49,7 @@ class EmailService {
       <p>Your 6-digit code is: <strong>${code}</strong></p>
       <p>This code expires in 10 minutes.</p>
     `;
+    logger.info(`[DEVELOPMENT] OTP for ${to}: ${code} (${type})`);
     return this.sendMail(to, title, html);
   }
 

@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../api';
 import { useToast } from './Toast';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -21,24 +21,58 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
   const [name, setName] = useState(profile?.name || '');
   const [age, setAge] = useState(profile?.age || 18);
   const [bioText, setBioText] = useState('');
+  const [occupation, setOccupation] = useState(profile?.occupation || '');
   const [selectedInterests, setSelectedInterests] = useState([]);
   const [photos, setPhotos] = useState([]);
 
   // Premium Status State
   const [isPremium, setIsPremium] = useState(false);
+  const [entitlements, setEntitlements] = useState(null);
 
-  // Settings State
-  const [distanceLimit, setDistanceLimit] = useState(25);
+  // Settings State — loaded from backend
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [showOnlineStatus, setShowOnlineStatus] = useState(true);
+  const [showDistance, setShowDistance] = useState(true);
+  const [showAge, setShowAge] = useState(true);
   const [incognitoMode, setIncognitoMode] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(true);
+
+  // Preferences State — loaded from backend
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [distanceLimit, setDistanceLimit] = useState(25);
+  const [minAge, setMinAge] = useState(18);
+  const [maxAge, setMaxAge] = useState(50);
+  const [preferredGender, setPreferredGender] = useState('everyone');
+
+  // Stats State — loaded from API
+  const [stats, setStats] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+
+  // Location State
+  const [locationUpdating, setLocationUpdating] = useState(false);
 
   // Safety Center State
   const [showReportModal, setShowReportModal] = useState(false);
+  const [reportTargetId, setReportTargetId] = useState('');
   const [reportReason, setReportReason] = useState('');
   const [reportDetails, setReportDetails] = useState('');
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
 
   const { showToast } = useToast();
+
+  // Format location display from profile
+  const getLocationDisplay = useCallback(() => {
+    if (profile?.city) return profile.city;
+    if (profile?.latitude && profile?.longitude) {
+      return `${profile.latitude.toFixed(2)}°, ${profile.longitude.toFixed(2)}°`;
+    }
+    return 'Location not set';
+  }, [profile]);
+
+  const getImageUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('/uploads')) return `http://localhost:5000${url}`;
+    return url;
+  };
 
   // Load blocked list when settings tab opens
   useEffect(() => {
@@ -47,15 +81,77 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     }
   }, [activeTab]);
 
-  // Sync initial values
+  // Load settings & preferences from backend when settings tab opens
+  useEffect(() => {
+    if (activeTab === 'settings' && !settingsLoaded) {
+      api.getSettings().then(res => {
+        if (res) {
+          setShowOnlineStatus(res.showOnlineStatus ?? true);
+          setShowDistance(res.showDistance ?? true);
+          setShowAge(res.showAge ?? true);
+          setIncognitoMode(res.incognitoMode ?? false);
+        }
+        setSettingsLoaded(true);
+      }).catch(err => {
+        console.warn('Failed to load settings:', err.message);
+        setSettingsLoaded(true);
+      });
+    }
+    if (activeTab === 'settings' && !prefsLoaded) {
+      api.getPreferences().then(res => {
+        if (res) {
+          setDistanceLimit(res.maxDistance ?? 25);
+          setMinAge(res.minAge ?? 18);
+          setMaxAge(res.maxAge ?? 50);
+          setPreferredGender(res.preferredGender ?? 'everyone');
+        }
+        setPrefsLoaded(true);
+      }).catch(err => {
+        console.warn('Failed to load preferences:', err.message);
+        setPrefsLoaded(true);
+      });
+    }
+  }, [activeTab, settingsLoaded, prefsLoaded]);
+
+  // Load real stats from API when stats tab opens
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      setStatsLoading(true);
+      api.getInteractionStats().then(res => {
+        setStats(res);
+      }).catch(err => {
+        console.warn('Failed to load stats:', err.message);
+        setStats(null);
+      }).finally(() => setStatsLoading(false));
+    }
+  }, [activeTab]);
+
+  // Load entitlements on mount to check premium status
+  useEffect(() => {
+    api.getEntitlements().then(res => {
+      if (res && (res.isPremium || res.plan || (res.entitlements && res.entitlements.length > 0))) {
+        setIsPremium(true);
+        setEntitlements(res);
+      }
+    }).catch(() => {
+      // Not premium or endpoint not available
+    });
+  }, []);
+
+  // Sync initial values from profile
   useEffect(() => {
     if (profile) {
-      setName(profile.name);
-      setAge(profile.age);
+      setName(profile.name || '');
+      setAge(profile.age || 18);
+      setOccupation(profile.occupation || '');
       setPhotos(profile.photos || []);
 
-      // Extract interests and bio text from database bio field
-      if (profile.bio) {
+      // Use separate bio and interests fields if available
+      if (Array.isArray(profile.interests) && profile.interests.length > 0) {
+        setSelectedInterests(profile.interests);
+        setBioText(profile.bio || '');
+      } else if (profile.bio) {
+        // Legacy: extract interests from concatenated bio string
         if (profile.bio.includes('\n\nInterests: ')) {
           const parts = profile.bio.split('\n\nInterests: ');
           setBioText(parts[0]);
@@ -68,6 +164,33 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     }
   }, [profile]);
 
+  // Persist setting change to backend
+  const handleSettingChange = async (key, value) => {
+    const setterMap = {
+      showOnlineStatus: setShowOnlineStatus,
+      showDistance: setShowDistance,
+      showAge: setShowAge,
+      incognitoMode: setIncognitoMode
+    };
+    setterMap[key]?.(value);
+    try {
+      await api.updateSettings({ [key]: value });
+    } catch (err) {
+      showToast('Failed to update setting: ' + err.message, 'error');
+      // Revert
+      setterMap[key]?.(!value);
+    }
+  };
+
+  // Persist preference change to backend (debounced for sliders)
+  const handlePrefChange = async (updates) => {
+    try {
+      await api.updatePreferences(updates);
+    } catch (err) {
+      showToast('Failed to update preference: ' + err.message, 'error');
+    }
+  };
+
   const handleUnblock = async (blockedId) => {
     try {
       await api.unblockUser(blockedId);
@@ -78,20 +201,16 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     }
   };
 
+  // Photo upload — pass File object directly (not base64)
   const handlePhotoUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        try {
-          const res = await api.uploadPhoto(reader.result, photos.length === 0);
-          setPhotos(prev => [...prev, res.photo]);
-          showToast('Photo uploaded successfully.');
-        } catch (err) {
-          showToast('Photo upload failed: ' + err.message, 'error');
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+    try {
+      const res = await api.uploadPhoto(file, photos.length === 0);
+      setPhotos(prev => [...prev, res.photo || res]);
+      showToast('Photo uploaded successfully.');
+    } catch (err) {
+      showToast('Photo upload failed: ' + err.message, 'error');
     }
   };
 
@@ -105,21 +224,32 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     }
   };
 
+  const handleSetPrimary = async (photoId) => {
+    try {
+      await api.setPrimaryPhoto(photoId);
+      setPhotos(prev => prev.map(p => ({ ...p, isPrimary: p.id === photoId })));
+      showToast('Primary photo updated.');
+    } catch (err) {
+      showToast('Failed to set primary photo: ' + err.message, 'error');
+    }
+  };
+
+  // Save profile — bio and interests as separate fields
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     try {
-      const formattedBio = `${bioText}\n\nInterests: ${selectedInterests.join(', ')}`;
-      const res = await api.saveProfile({
+      const res = await api.updateProfile({
         name,
         age: parseInt(age),
+        bio: bioText,
+        interests: selectedInterests,
+        occupation,
         gender: profile.gender || 'female',
-        preference: profile.preference || 'everyone',
-        bio: formattedBio,
-        latitude: profile.latitude,
-        longitude: profile.longitude
+        preference: profile.preference || 'everyone'
       });
-      setProfile(res.profile);
-      onProfileUpdated(res.profile);
+      const updatedProfile = res.profile || res;
+      setProfile(updatedProfile);
+      onProfileUpdated(updatedProfile);
       showToast('Profile saved successfully.');
       setActiveTab('profile');
     } catch (err) {
@@ -135,36 +265,56 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
     }
   };
 
-  const handlePurchasePremium = (tier) => {
-    setIsPremium(true);
-    confetti({
-      particleCount: 100,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#005ab7', '#abc7ff', '#ffffff', '#ffd700']
-    });
-    showToast(`🎉 Congratulations! You have successfully upgraded to Spark ${tier}!`, 'success');
-    setActiveTab('profile');
+  // Update location using browser geolocation
+  const handleUpdateLocation = async () => {
+    if (!navigator.geolocation) {
+      showToast('Geolocation is not supported by your browser.', 'error');
+      return;
+    }
+    setLocationUpdating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const res = await api.updateLocation(latitude, longitude);
+          const updatedProfile = { ...profile, latitude, longitude, ...(res?.profile || {}) };
+          setProfile(updatedProfile);
+          onProfileUpdated(updatedProfile);
+          showToast('Location updated successfully.');
+        } catch (err) {
+          showToast('Failed to update location: ' + err.message, 'error');
+        } finally {
+          setLocationUpdating(false);
+        }
+      },
+      (err) => {
+        showToast('Location access denied: ' + err.message, 'error');
+        setLocationUpdating(false);
+      }
+    );
   };
 
+  // Report — uses correct API signature: (targetId, reasonCategory, description)
   const handleReportSubmit = async (e) => {
     e.preventDefault();
     if (!reportReason) {
       showToast('Please select a reason for reporting.', 'error');
       return;
     }
+    if (!reportTargetId.trim()) {
+      showToast('Please enter the user ID to report.', 'error');
+      return;
+    }
     setIsSubmittingReport(true);
     try {
-      await api.reportUser(reportReason, reportDetails);
+      await api.reportUser(reportTargetId.trim(), reportReason, reportDetails);
       showToast('Report submitted successfully. We will review it shortly.');
       setShowReportModal(false);
+      setReportTargetId('');
       setReportReason('');
       setReportDetails('');
-    } catch {
-      showToast('Report submitted successfully. We will review it shortly.'); // optimistic fallback
-      setShowReportModal(false);
-      setReportReason('');
-      setReportDetails('');
+    } catch (err) {
+      showToast('Failed to submit report: ' + err.message, 'error');
     } finally {
       setIsSubmittingReport(false);
     }
@@ -204,9 +354,10 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
           {/* Card Hero */}
           <div className="relative w-full h-80 rounded-[24px] overflow-hidden shadow-lg border border-outline-variant/10">
             <img 
-              src={photos[0]?.url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
+              src={getImageUrl(photos[0]?.url) || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=800"} 
               alt={profile.name} 
               className="w-full h-full object-cover" 
+              loading="lazy"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent"></div>
             
@@ -227,7 +378,10 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                     <span className="text-[9px] font-bold text-secondary uppercase">Standard Member</span>
                   </div>
                 )}
-                <span className="text-xs text-on-surface-variant font-medium">SF, California</span>
+                <span className="text-xs text-on-surface-variant font-medium flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">location_on</span>
+                  {getLocationDisplay()}
+                </span>
               </div>
             </div>
           </div>
@@ -238,6 +392,31 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
             <p className="text-xs md:text-sm text-on-surface-variant leading-relaxed">
               {bioText || 'Add something interesting about yourself under the Edit Info tab!'}
             </p>
+            {occupation && (
+              <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-1">
+                <span className="material-symbols-outlined text-[14px]">work</span>
+                {occupation}
+              </p>
+            )}
+          </div>
+
+          {/* Location & Update */}
+          <div className="pearl-card p-4 rounded-2xl bg-white/40 backdrop-blur-sm border border-outline-variant/10 shadow-sm flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-[20px]">my_location</span>
+              <div>
+                <h4 className="text-xs font-bold text-on-surface">Current Location</h4>
+                <p className="text-[10px] text-on-surface-variant">{getLocationDisplay()}</p>
+              </div>
+            </div>
+            <button
+              onClick={handleUpdateLocation}
+              disabled={locationUpdating}
+              className="text-[10px] font-bold text-primary border border-primary/20 hover:bg-primary/5 px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[14px]">{locationUpdating ? 'progress_activity' : 'refresh'}</span>
+              {locationUpdating ? 'Updating...' : 'Update Location'}
+            </button>
           </div>
 
           {/* Interests Chips */}
@@ -262,7 +441,7 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
             <div className="grid grid-cols-3 gap-3">
               {photos.map((p, idx) => (
                 <div key={idx} className="aspect-square rounded-xl overflow-hidden pearl-card border border-outline-variant/10 shadow-sm relative group">
-                  <img src={p.url} alt="Moment" className="w-full h-full object-cover" />
+                  <img src={getImageUrl(p.url)} alt="Moment" className="w-full h-full object-cover" loading="lazy" />
                   <div className="absolute top-1 right-1 bg-primary/20 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold">
                     {idx + 1}
                   </div>
@@ -304,12 +483,23 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
               </div>
 
               <div>
+                <label className="block text-[10px] font-bold uppercase text-muted mb-2">Occupation</label>
+                <input
+                  type="text"
+                  value={occupation}
+                  onChange={(e) => setOccupation(e.target.value)}
+                  placeholder="e.g. Software Engineer at Google"
+                  className="w-full bg-white/40 border-b-2 border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all"
+                />
+              </div>
+
+              <div>
                 <label className="block text-[10px] font-bold uppercase text-muted mb-2">About Me (Bio)</label>
                 <textarea
                   value={bioText}
                   onChange={(e) => setBioText(e.target.value)}
                   className="w-full bg-white/40 border-b-2 border-outline-variant focus:border-primary focus:ring-0 text-sm py-2 px-3 outline-none rounded-t-lg transition-all h-24 resize-none"
-                  required
+                  placeholder="Tell people about yourself..."
                 />
               </div>
 
@@ -320,7 +510,7 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                 <div className="grid grid-cols-4 gap-3">
                   {photos.map((p) => (
                     <div key={p.id} className="aspect-square rounded-lg border border-outline-variant/30 overflow-hidden relative group shadow-sm bg-white/20">
-                      <img src={p.url} alt="Profile" className="w-full h-full object-cover" />
+                      <img src={getImageUrl(p.url)} alt="Profile" className="w-full h-full object-cover" loading="lazy" />
                       <button
                         type="button"
                         onClick={() => handleDeletePhoto(p.id)}
@@ -328,10 +518,18 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                       >
                         ×
                       </button>
-                      {p.isPrimary && (
+                      {p.isPrimary ? (
                         <div className="absolute bottom-1 left-1 bg-primary text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase">
                           Primary
                         </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSetPrimary(p.id)}
+                          className="absolute bottom-1 left-1 bg-white/80 text-primary text-[8px] font-bold px-1.5 py-0.5 rounded uppercase opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
+                        >
+                          Set Primary
+                        </button>
                       )}
                     </div>
                   ))}
@@ -390,11 +588,12 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
       {activeTab === 'settings' && (
         <div className="animate-in fade-in duration-300 space-y-6">
           
+          {/* Discovery Preferences */}
           <div className="glass-card rounded-[24px] p-6 shadow-sm space-y-6">
-            <h3 className="text-sm font-bold text-primary uppercase tracking-wide">Account Settings</h3>
+            <h3 className="text-sm font-bold text-primary uppercase tracking-wide">Discovery Preferences</h3>
             
             <div className="space-y-4">
-              {/* Distance limit slide */}
+              {/* Distance limit slider */}
               <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
                 <div>
                   <h4 className="text-xs font-bold text-on-surface">Maximum Distance Range</h4>
@@ -406,11 +605,115 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                     min="10" 
                     max="100" 
                     value={distanceLimit}
-                    onChange={(e) => setDistanceLimit(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setDistanceLimit(val);
+                    }}
+                    onMouseUp={() => handlePrefChange({ maxDistance: distanceLimit })}
+                    onTouchEnd={() => handlePrefChange({ maxDistance: distanceLimit })}
                     className="accent-primary"
                   />
                   <span className="text-xs font-bold text-primary min-w-[50px] text-right">{distanceLimit} miles</span>
                 </div>
+              </div>
+
+              {/* Age range */}
+              <div className="py-2 border-b border-outline-variant/10">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-on-surface">Age Range</h4>
+                    <p className="text-[10px] text-on-surface-variant mt-0.5">Set preferred age range for matches.</p>
+                  </div>
+                  <span className="text-xs font-bold text-primary">{minAge} – {maxAge}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-on-surface-variant w-8">Min</span>
+                  <input 
+                    type="range" min="18" max="70" value={minAge}
+                    onChange={(e) => setMinAge(parseInt(e.target.value))}
+                    onMouseUp={() => handlePrefChange({ minAge, maxAge })}
+                    onTouchEnd={() => handlePrefChange({ minAge, maxAge })}
+                    className="accent-primary flex-1"
+                  />
+                  <span className="text-[10px] text-on-surface-variant w-8">Max</span>
+                  <input 
+                    type="range" min="18" max="70" value={maxAge}
+                    onChange={(e) => setMaxAge(parseInt(e.target.value))}
+                    onMouseUp={() => handlePrefChange({ minAge, maxAge })}
+                    onTouchEnd={() => handlePrefChange({ minAge, maxAge })}
+                    className="accent-primary flex-1"
+                  />
+                </div>
+              </div>
+
+              {/* Gender preference */}
+              <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                <div>
+                  <h4 className="text-xs font-bold text-on-surface">Show Me</h4>
+                  <p className="text-[10px] text-on-surface-variant mt-0.5">Preferred gender for discovery.</p>
+                </div>
+                <select
+                  value={preferredGender}
+                  onChange={(e) => {
+                    setPreferredGender(e.target.value);
+                    handlePrefChange({ preferredGender: e.target.value });
+                  }}
+                  className="bg-white/40 border border-outline-variant/30 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-primary"
+                >
+                  <option value="everyone">Everyone</option>
+                  <option value="male">Men</option>
+                  <option value="female">Women</option>
+                  <option value="nonbinary">Non-binary</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Account Settings */}
+          <div className="glass-card rounded-[24px] p-6 shadow-sm space-y-6">
+            <h3 className="text-sm font-bold text-primary uppercase tracking-wide">Account Settings</h3>
+            
+            <div className="space-y-4">
+              {/* Show Online Status toggle */}
+              <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                <div>
+                  <h4 className="text-xs font-bold text-on-surface">Show Online Status</h4>
+                  <p className="text-[10px] text-on-surface-variant mt-0.5">Let others see when you are active.</p>
+                </div>
+                <button 
+                  onClick={() => handleSettingChange('showOnlineStatus', !showOnlineStatus)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${showOnlineStatus ? 'bg-primary' : 'bg-outline-variant/50'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showOnlineStatus ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                </button>
+              </div>
+
+              {/* Show Distance toggle */}
+              <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                <div>
+                  <h4 className="text-xs font-bold text-on-surface">Show Distance</h4>
+                  <p className="text-[10px] text-on-surface-variant mt-0.5">Display your distance on your profile.</p>
+                </div>
+                <button 
+                  onClick={() => handleSettingChange('showDistance', !showDistance)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${showDistance ? 'bg-primary' : 'bg-outline-variant/50'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showDistance ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                </button>
+              </div>
+
+              {/* Show Age toggle */}
+              <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
+                <div>
+                  <h4 className="text-xs font-bold text-on-surface">Show Age</h4>
+                  <p className="text-[10px] text-on-surface-variant mt-0.5">Display your age on your profile.</p>
+                </div>
+                <button 
+                  onClick={() => handleSettingChange('showAge', !showAge)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${showAge ? 'bg-primary' : 'bg-outline-variant/50'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${showAge ? 'translate-x-5' : 'translate-x-0'}`}></div>
+                </button>
               </div>
 
               {/* Incognito mode toggle */}
@@ -420,24 +723,10 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                   <p className="text-[10px] text-on-surface-variant mt-0.5">Hide your profile from discovery feeds unless you swipe right.</p>
                 </div>
                 <button 
-                  onClick={() => setIncognitoMode(!incognitoMode)}
+                  onClick={() => handleSettingChange('incognitoMode', !incognitoMode)}
                   className={`w-11 h-6 rounded-full p-1 transition-colors ${incognitoMode ? 'bg-primary' : 'bg-outline-variant/50'}`}
                 >
                   <div className={`w-4 h-4 rounded-full bg-white transition-transform ${incognitoMode ? 'translate-x-5' : 'translate-x-0'}`}></div>
-                </button>
-              </div>
-
-              {/* Push notifications toggle */}
-              <div className="flex justify-between items-center py-2 border-b border-outline-variant/10">
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface">Push Notification Alerts</h4>
-                  <p className="text-[10px] text-on-surface-variant mt-0.5">Alert immediately on matches, messages, and ELO boosts.</p>
-                </div>
-                <button 
-                  onClick={() => setPushEnabled(!pushEnabled)}
-                  className={`w-11 h-6 rounded-full p-1 transition-colors ${pushEnabled ? 'bg-primary' : 'bg-outline-variant/50'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${pushEnabled ? 'translate-x-5' : 'translate-x-0'}`}></div>
                 </button>
               </div>
             </div>
@@ -480,93 +769,106 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
         <div className="animate-in fade-in duration-300 space-y-6">
           <section className="text-center md:text-left mb-4">
             <h2 className="text-lg font-bold text-primary">Performance Insights</h2>
-            <p className="text-xs text-on-surface-variant">Track your visibility, active chats, and weekly match ratios.</p>
+            <p className="text-xs text-on-surface-variant">Track your visibility, active chats, and match ratios.</p>
           </section>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Matches Per Week chart */}
-            <div className="md:col-span-2 glass-card rounded-[20px] p-5 flex flex-col justify-between border border-outline-variant/10 shadow-sm">
-              <div className="flex justify-between mb-4">
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface">Weekly Matches</h4>
-                  <p className="text-[10px] text-green-500 font-semibold">+12% increase this week</p>
-                </div>
-                <span className="text-[10px] font-bold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full uppercase">Last 7 Days</span>
-              </div>
-              
-              {/* Bars chart */}
-              <div className="h-32 flex items-end gap-3 px-2">
-                {[
-                  { d: 'MON', h: 'h-10' },
-                  { d: 'TUE', h: 'h-16' },
-                  { d: 'WED', h: 'h-14' },
-                  { d: 'THU', h: 'h-24' },
-                  { d: 'FRI', h: 'h-20' },
-                  { d: 'SAT', h: 'h-28' },
-                  { d: 'SUN', h: 'h-22' }
-                ].map((bar, idx) => (
-                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5">
-                    <div className={`${bar.h} w-full bg-primary/20 hover:bg-primary rounded-t-md transition-all duration-300 cursor-pointer`} title={bar.d}></div>
-                    <span className="text-[8px] font-bold text-on-surface-variant">{bar.d}</span>
+          {statsLoading ? (
+            <div className="flex justify-center items-center py-16">
+              <span className="material-symbols-outlined text-primary text-3xl animate-spin">progress_activity</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Stats cards — show only what the API returns */}
+              {stats?.profileViews !== undefined && (
+                <div className="glass-card rounded-[20px] p-5 flex flex-col justify-center items-center text-center border border-outline-variant/10 shadow-sm">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2 text-primary">
+                    <span className="material-symbols-outlined text-[24px]">visibility</span>
                   </div>
-                ))}
-              </div>
-            </div>
+                  <div className="text-2xl font-bold text-primary">{stats.profileViews.toLocaleString()}</div>
+                  <h4 className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">Profile Views</h4>
+                </div>
+              )}
 
-            {/* Profile Views indicator */}
-            <div className="glass-card rounded-[20px] p-5 flex flex-col justify-center items-center text-center border border-outline-variant/10 shadow-sm">
-              <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2 text-primary">
-                <span className="material-symbols-outlined text-[24px]">visibility</span>
-              </div>
-              <div className="text-2xl font-bold text-primary">1,284</div>
-              <h4 className="text-[9px] font-bold text-on-surface-variant uppercase tracking-widest mt-1">Profile Views</h4>
-              <div className="w-full bg-surface-container rounded-full h-1.5 overflow-hidden mt-4">
-                <div className="h-full bg-gradient-to-r from-primary to-primary-container w-[68%] rounded-full"></div>
-              </div>
-              <p className="text-[9px] text-on-surface-variant mt-2 font-medium">Top 5% of active users</p>
-            </div>
+              {stats?.likesReceived !== undefined && (
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <span className="material-symbols-outlined text-[18px]">favorite</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">{stats.likesReceived.toLocaleString()}</div>
+                    <p className="text-[9px] text-on-surface-variant font-medium">Likes Received</p>
+                  </div>
+                </div>
+              )}
 
-            {/* Stats list */}
-            {[
-              { label: 'Active Chats', val: '42', icon: 'forum' },
-              { label: 'Match Strength', val: '91%', icon: 'favorite' },
-              { label: 'Current Tier', val: isPremium ? 'Spark Gold' : 'Standard', icon: 'auto_awesome' }
-            ].map((stat, idx) => (
-              <div key={idx} className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+              {stats?.likesSent !== undefined && (
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <span className="material-symbols-outlined text-[18px]">thumb_up</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">{stats.likesSent.toLocaleString()}</div>
+                    <p className="text-[9px] text-on-surface-variant font-medium">Likes Sent</p>
+                  </div>
+                </div>
+              )}
+
+              {stats?.matches !== undefined && (
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <span className="material-symbols-outlined text-[18px]">handshake</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">{stats.matches.toLocaleString()}</div>
+                    <p className="text-[9px] text-on-surface-variant font-medium">Total Matches</p>
+                  </div>
+                </div>
+              )}
+
+              {stats?.activeChats !== undefined && (
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <span className="material-symbols-outlined text-[18px]">forum</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">{stats.activeChats.toLocaleString()}</div>
+                    <p className="text-[9px] text-on-surface-variant font-medium">Active Chats</p>
+                  </div>
+                </div>
+              )}
+
+              {stats?.matchRate !== undefined && (
+                <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
+                  <div className="p-2 bg-primary/10 text-primary rounded-lg">
+                    <span className="material-symbols-outlined text-[18px]">auto_awesome</span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-on-surface">{typeof stats.matchRate === 'number' ? `${Math.round(stats.matchRate * 100)}%` : stats.matchRate}</div>
+                    <p className="text-[9px] text-on-surface-variant font-medium">Match Rate</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Current tier - always shown */}
+              <div className="glass-card rounded-xl p-4 flex items-center gap-3 border border-outline-variant/10 shadow-sm">
                 <div className="p-2 bg-primary/10 text-primary rounded-lg">
-                  <span className="material-symbols-outlined text-[18px]">{stat.icon}</span>
+                  <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-on-surface">{stat.val}</div>
-                  <p className="text-[9px] text-on-surface-variant font-medium">{stat.label}</p>
+                  <div className="text-sm font-bold text-on-surface">{isPremium ? 'Spark Gold' : 'Standard'}</div>
+                  <p className="text-[9px] text-on-surface-variant font-medium">Current Tier</p>
                 </div>
               </div>
-            ))}
 
-            {/* Engagement map */}
-            <div className="md:col-span-3 glass-card rounded-[20px] p-5 border border-outline-variant/10 shadow-sm space-y-4">
-              <h4 className="text-xs font-bold text-on-surface">Global Resonance Hotspots</h4>
-              <div className="h-32 bg-cover bg-center rounded-xl relative overflow-hidden bg-primary/5 flex items-center justify-center">
-                <span className="material-symbols-outlined text-[48px] text-primary/10 select-none">public</span>
-                
-                {/* Simulated pulsers */}
-                <div className="absolute top-1/2 left-1/3 w-3 h-3 bg-primary rounded-full animate-ping"></div>
-                <div className="absolute top-1/4 right-1/4 w-3 h-3 bg-primary rounded-full animate-ping" style={{ animationDelay: '0.4s' }}></div>
-                <div className="absolute bottom-1/3 left-1/2 w-3 h-3 bg-primary rounded-full animate-ping" style={{ animationDelay: '0.8s' }}></div>
-              </div>
-              
-              <div className="flex gap-4 justify-center">
-                <div className="flex items-center gap-1.5 text-[10px] text-on-surface font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-primary"></span>
-                  <span>San Francisco — High</span>
+              {/* No stats available fallback */}
+              {!stats && (
+                <div className="md:col-span-3 glass-card rounded-[20px] p-8 border border-outline-variant/10 shadow-sm text-center">
+                  <span className="material-symbols-outlined text-primary/30 text-[48px] mb-2">monitoring</span>
+                  <p className="text-sm text-on-surface-variant">No insights data available yet. Keep swiping to generate stats!</p>
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-on-surface font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-primary-container"></span>
-                  <span>London — Medium</span>
-                </div>
-              </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -619,7 +921,7 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
         </div>
       )}
 
-      {/* Report Modal */}
+      {/* Report Modal — uses correct API: reportUser(targetId, reasonCategory, description) */}
       <AnimatePresence>
         {showReportModal && (
           <motion.div 
@@ -641,6 +943,17 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                 </button>
               </div>
               <form onSubmit={handleReportSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase text-muted mb-2">User ID to Report</label>
+                  <input
+                    type="text"
+                    value={reportTargetId}
+                    onChange={e => setReportTargetId(e.target.value)}
+                    className="w-full bg-surface/50 border border-outline-variant/30 rounded-lg p-2.5 text-sm outline-none focus:border-primary"
+                    placeholder="Enter the user's ID"
+                    required
+                  />
+                </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase text-muted mb-2">Reason</label>
                   <select 
@@ -667,7 +980,7 @@ export default function ProfileAndSettings({ myProfile, onLogout, onProfileUpdat
                 </div>
                 <button 
                   type="submit" 
-                  disabled={isSubmittingReport || !reportReason}
+                  disabled={isSubmittingReport || !reportReason || !reportTargetId.trim()}
                   className="w-full py-3 bg-error text-white font-bold rounded-xl shadow-md hover:bg-error/90 transition-colors disabled:opacity-50"
                 >
                   {isSubmittingReport ? 'Submitting...' : 'Submit Report'}

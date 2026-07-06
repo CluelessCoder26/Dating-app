@@ -1,4 +1,5 @@
 import prisma from '../../config/prisma.js';
+import { isLikeRating } from '../../utils/swipeRating.js';
 import { eventBus } from '../../events/eventBus.js';
 import { relationshipService } from './relationship.service.js';
 import logger from '../../utils/logger.js';
@@ -6,72 +7,69 @@ import { socketManager } from '../../sockets/SocketManager.js';
 
 class MatchEngine {
   /**
-   * Process potential match asynchronously
-   * @param {Object} payload 
+   * Async fallback for queued match detection (idempotent).
    */
   async detectMatch(payload) {
     const { actorId, targetId } = payload;
-    
-    // Check if target already LIKED actor
+
     const reverseSwipe = await prisma.swipe.findFirst({
-      where: { swiperId: targetId, targetId: actorId, rating: { in: ['LIKE', 'SUPER_LIKE'] } }
+      where: { swiperId: targetId, targetId: actorId },
     });
 
-    if (reverseSwipe) {
-      logger.info(`Mutual Match Detected: ${actorId} <-> ${targetId}`);
-      
-      const [user1Id, user2Id] = [actorId, targetId].sort();
+    if (!reverseSwipe || !isLikeRating(reverseSwipe.rating)) {
+      return;
+    }
 
-      let match;
-      let isNewMatch = false;
+    const actorSwipe = await prisma.swipe.findFirst({
+      where: { swiperId: actorId, targetId },
+    });
 
-      // 1. Create Match Atomically with Concurrency Control
-      try {
-        match = await prisma.match.create({
-          data: { user1Id, user2Id }
+    if (!actorSwipe || !isLikeRating(actorSwipe.rating)) {
+      return;
+    }
+
+    logger.info(`Mutual Match Detected: ${actorId} <-> ${targetId}`);
+
+    const [user1Id, user2Id] = [actorId, targetId].sort();
+
+    let match;
+    let isNewMatch = false;
+
+    try {
+      match = await prisma.match.create({ data: { user1Id, user2Id } });
+      isNewMatch = true;
+    } catch (error) {
+      if (error.code === 'P2002') {
+        match = await prisma.match.findUnique({
+          where: { user1Id_user2Id: { user1Id, user2Id } },
         });
-        isNewMatch = true;
-      } catch (error) {
-        if (error.code === 'P2002') { // Unique constraint violation
-          logger.info(`Match already exists for ${user1Id} <-> ${user2Id}, skipping duplicate events.`);
-          match = await prisma.match.findUnique({
-            where: { user1Id_user2Id: { user1Id, user2Id } }
-          });
-        } else {
-          throw error;
-        }
+      } else {
+        throw error;
       }
+    }
 
-      if (isNewMatch && match) {
-        // 2. Compute metadata (Idempotent)
-        await this.generateMetadata(match.id, actorId, targetId);
+    if (isNewMatch && match) {
+      await this.generateMetadata(match.id);
+      await relationshipService.updateRelationship(user1Id, user2Id, 'MATCHED');
+      eventBus.publish('MATCH_CREATED', { matchId: match.id, user1Id, user2Id }).catch(() => {});
 
-        // 3. Update Relationship Graph
-        await relationshipService.updateRelationship(user1Id, user2Id, 'MATCHED');
-
-        // 4. Fire Match Created Event
-        eventBus.publish('MATCH_CREATED', { matchId: match.id, user1Id, user2Id }).catch(() => {});
-
-        // 5. Emit Socket.IO Event
-        const io = socketManager.getIO();
-        if (io) {
-          io.to(`user_${user1Id}`).emit('match.created', { matchId: match.id, partnerId: user2Id });
-          io.to(`user_${user2Id}`).emit('match.created', { matchId: match.id, partnerId: user1Id });
-        }
+      const io = socketManager.getIO();
+      if (io) {
+        io.to(`user_${user1Id}`).emit('match.created', { matchId: match.id, partnerId: user2Id });
+        io.to(`user_${user2Id}`).emit('match.created', { matchId: match.id, partnerId: user1Id });
       }
     }
   }
 
-  async generateMetadata(matchId, u1, u2) {
-    // Upsert guarantees no duplicate metadata rows even under race conditions
+  async generateMetadata(matchId) {
     await prisma.matchMetadata.upsert({
       where: { matchId },
       update: {},
       create: {
         matchId,
-        compatibilityScore: Math.random() * 100,
-        eloDifference: 0 // Placeholder
-      }
+        compatibilityScore: 0,
+        eloDifference: 0,
+      },
     });
   }
 }

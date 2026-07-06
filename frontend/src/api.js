@@ -81,6 +81,20 @@ export const api = {
     return request('/auth/me');
   },
 
+  async forgotPassword(email) {
+    return request('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+  },
+
+  async resetPassword(email, code, newPassword) {
+    return request('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, code, newPassword })
+    });
+  },
+
   logout() {
     localStorage.removeItem('token');
     if (socket) {
@@ -97,24 +111,96 @@ export const api = {
     });
   },
 
+  updateProfile(profileData) {
+    return request('/profile', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    });
+  },
+
   getProfile(userId) {
     return request(`/profile/${userId}`);
   },
 
-  getDiscover(maxDistance = 50) {
-    return request(`/profile/discover?maxDistance=${maxDistance}`);
+  updateLocation(latitude, longitude) {
+    return request('/profile/location', {
+      method: 'PUT',
+      body: JSON.stringify({ latitude, longitude })
+    });
   },
 
-  // Swipes & Matches
-  swipe(targetId, rating) {
-    return request('/swipe', {
+  getSettings() {
+    return request('/profile/settings');
+  },
+
+  updateSettings(settings) {
+    return request('/profile/settings', {
+      method: 'PUT',
+      body: JSON.stringify(settings)
+    });
+  },
+
+  getPreferences() {
+    return request('/profile/preferences');
+  },
+
+  updatePreferences(preferences) {
+    return request('/profile/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(preferences)
+    });
+  },
+
+  getDiscover(maxDistance = 50) {
+    return request(`/discovery?maxDistance=${maxDistance}`);
+  },
+
+  getDiscoverNext(cursor, maxDistance = 50) {
+    const params = new URLSearchParams({ maxDistance });
+    if (cursor) params.set('cursor', cursor);
+    return request(`/discovery/next?${params}`);
+  },
+
+  getDiscoveryPreferences() {
+    return request('/discovery/preferences');
+  },
+
+  updateDiscoveryPreferences(prefs) {
+    return request('/discovery/preferences', {
+      method: 'PATCH',
+      body: JSON.stringify(prefs)
+    });
+  },
+
+  // Swipes & Matches (unified interactions API)
+  swipe(targetId, action) {
+    return request('/interactions/swipe', {
       method: 'POST',
-      body: JSON.stringify({ targetId, rating })
+      body: JSON.stringify({ targetId, action })
+    });
+  },
+
+  undoSwipe(targetId) {
+    return request('/interactions/swipe', {
+      method: 'POST',
+      body: JSON.stringify({ targetId, action: 'REWIND' })
     });
   },
 
   getMatches() {
     return request('/swipe/matches');
+  },
+
+  getLikesReceived(page = 1, pageSize = 20) {
+    return request(`/interactions/likes-received?page=${page}&pageSize=${pageSize}`);
+  },
+
+  acceptLike(likerId) {
+    return request(`/interactions/likes-received/${likerId}/accept`, { method: 'POST' });
+  },
+
+  rejectLike(likerId) {
+    return request(`/interactions/likes-received/${likerId}/reject`, { method: 'POST' });
   },
 
   getMessages(matchId) {
@@ -127,17 +213,42 @@ export const api = {
     });
   },
 
-  // Photos
-  uploadPhoto(photoData, isPrimary = false) {
-    return request('/photos/upload', {
+  // Photos — uses multipart/form-data to match backend multer middleware
+  async uploadPhoto(file, isPrimary = false) {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('photo', file);
+    formData.append('isPrimary', isPrimary.toString());
+
+    const response = await fetch(`${API_BASE}/photos/upload`, {
       method: 'POST',
-      body: JSON.stringify({ photoData, isPrimary })
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
     });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `Upload failed (${response.status})`);
+    }
+    return data;
+  },
+
+  getPhotos() {
+    return request('/photos');
   },
 
   deletePhoto(photoId) {
     return request(`/photos/${photoId}`, {
       method: 'DELETE'
+    });
+  },
+
+  setPrimaryPhoto(photoId) {
+    return request('/photos/primary', {
+      method: 'PATCH',
+      body: JSON.stringify({ photoId })
     });
   },
 
@@ -159,17 +270,39 @@ export const api = {
     return request('/block');
   },
 
-  // Safety & Moderation
-  reportUser(reason, details) {
-    return request('/report', {
+  // Safety & Moderation — uses /trust/report (not /report which 404s)
+  reportUser(targetId, reasonCategory, description) {
+    return request('/trust/report', {
       method: 'POST',
-      body: JSON.stringify({ reason, details })
+      body: JSON.stringify({ targetId, targetType: 'USER', reasonCategory, description })
     });
   },
 
-  // Insights
-  getInsights() {
-    return request('/insights');
+  // Subscriptions & Entitlements
+  getSubscriptionPlans() {
+    return request('/growth/plans');
+  },
+
+  subscribe(planId) {
+    return request('/growth/subscriptions', {
+      method: 'POST',
+      body: JSON.stringify({ planId })
+    });
+  },
+
+  cancelSubscription(subscriptionId) {
+    return request(`/growth/subscriptions/${subscriptionId}`, {
+      method: 'DELETE'
+    });
+  },
+
+  getEntitlements() {
+    return request('/growth/entitlements');
+  },
+
+  // Insights / Stats
+  getInteractionStats() {
+    return request('/interactions/stats');
   },
 
   // WebSocket Manager

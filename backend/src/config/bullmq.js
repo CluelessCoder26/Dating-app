@@ -22,9 +22,11 @@ class QueueManager {
   }
 
   getQueue(queueName) {
-    if (env.USE_REDIS === 'false') {
+    if (env.USE_REDIS === 'false' || env.NODE_ENV === 'test') {
       return {
-        add: async () => { throw new Error('Redis disabled; Jobs will run synchronously.'); }
+        add: async () => { logger.info(`[MockQueue] Job added to ${queueName}`); return { id: 'mock-job' }; },
+        on: () => {},
+        process: () => {}
       };
     }
 

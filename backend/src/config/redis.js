@@ -40,8 +40,8 @@ class RedisManager {
   }
 
   async connect() {
-    if (env.USE_REDIS === 'false') {
-      logger.warn('⚠️ USE_REDIS is false. Redis client disabled.');
+    if (env.USE_REDIS === 'false' || env.NODE_ENV === 'test') {
+      logger.warn('⚠️ USE_REDIS is false or testing. Redis client disabled.');
       return;
     }
 

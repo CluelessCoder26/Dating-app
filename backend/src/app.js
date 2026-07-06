@@ -28,7 +28,9 @@ import opsRoutes from './routes/ops.js';
 const app = express();
 
 // Security Headers
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
 // Compression
 app.use(compression());

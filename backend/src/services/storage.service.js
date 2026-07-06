@@ -43,6 +43,7 @@ class StorageService {
       return { url: publicData.publicUrl, key: fileName };
     } else {
       const filePath = path.join(this.uploadDir, fileName);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
       await fs.writeFile(filePath, buffer);
       // For local, return a relative URL
       return { url: `/uploads/${fileName}`, key: fileName };
